@@ -289,18 +289,15 @@ if (typeof window !== 'undefined') {
   };
 }
 
-// CommonJS export for Node.js environments
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = {
-    generateRandomSecret,
-    createSecretHash,
-    createHashlock,
-    storeSecretToLocalStorage,
-    getSecretFromLocalStorage,
-    removeSecretFromLocalStorage,
-    listStoredSecrets,
-    clearAllStoredSecrets,
-    validateSecretAgainstHashlock,
-    generateSecretPackage
-  };
-}
+export {
+  generateRandomSecret,
+  createSecretHash,
+  createHashlock,
+  storeSecretToLocalStorage,
+  getSecretFromLocalStorage,
+  removeSecretFromLocalStorage,
+  listStoredSecrets,
+  clearAllStoredSecrets,
+  validateSecretAgainstHashlock,
+  generateSecretPackage
+};

@@ -1,10 +1,6 @@
-const express = require('express');
-const { 
-  getAllOrders, 
-  getOrderById, 
-  createOrder, 
-  updateOrderStatus 
-} = require('../controllers/ordersController');
+import express from 'express';
+
+import { getAllOrders, getOrderById, createOrder, updateOrderStatus } from '../controllers/ordersController.js';
 
 const router = express.Router();
 
@@ -148,30 +144,50 @@ router.get('/:id', getOrderById);
  *           schema:
  *             type: object
  *             required:
- *               - fromAddress
- *               - toAddress
+ *               - fromChain
+ *               - toChain
  *               - fromToken
  *               - toToken
  *               - fromAmount
  *               - toAmount
+ *               - makerSrcAddress
+ *               - makerDstAddress
+ *               - hashlock
  *             properties:
- *               fromAddress:
+ *               fromChain:
  *                 type: string
- *               toAddress:
+ *                 description: The source blockchain (e.g., "EVM", "Cardano").
+ *               toChain:
  *                 type: string
+ *                 description: The destination blockchain (e.g., "Cardano", "EVM").
  *               fromToken:
  *                 type: string
+ *                 description: Token to swap from
  *               toToken:
  *                 type: string
+ *                 description: Token to swap to
  *               fromAmount:
  *                 type: string
+ *                 description: Amount to swap from
  *               toAmount:
  *                 type: string
+ *                 description: Amount to receive
+ *               makerSrcAddress:
+ *                 type: string
+ *                 description: The maker's address on the source chain
+ *               makerDstAddress:
+ *                 type: string
+ *                 description: The maker's address on the destination chain
+ *               hashlock:
+ *                 type: string
+ *                 description: The SHA-256 hash of the secret
  *               relayerFee:
  *                 type: string
+ *                 description: Fee for the relayer (optional)
  *               expiresAt:
  *                 type: string
  *                 format: date-time
+ *                 description: Order expiration time (optional)
  *     responses:
  *       201:
  *         description: Order created successfully
@@ -221,4 +237,4 @@ router.post('/', createOrder);
  */
 router.patch('/:id/status', updateOrderStatus);
 
-module.exports = router;
+export default router;

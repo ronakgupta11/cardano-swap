@@ -1,5 +1,5 @@
-const { ethers } = require('ethers');
-const { ADDRESSES } = require('./constants');
+import { ethers } from 'ethers';
+import { ADDRESSES, SEPOLIA_RPC_URL } from './constants.js';
 /**
  * @description Ethereum blockchain utilities for cross-chain atomic swaps
  * This file contains utilities for interacting with Ethereum and EVM-compatible chains
@@ -80,12 +80,14 @@ const loadDeploymentAddresses = (networkName) => {
  * @param {ethers.providers.Provider} provider - Ethereum provider
  * @returns {Promise<string>} - EIP-712 signature
  */
-async function signOrder(maker, orderValue, provider = null) {
+async function signOrder(makerPK, orderValue) {
+    const provider = createProvider("sepolia", SEPOLIA_RPC_URL);
+    const wallet = createWallet(makerPK, provider);
   try {
     console.log(`\n✍️  Signing order with EIP-712...`);
     
     // Use provided provider or get from maker
-    const ethProvider = provider || maker.provider;
+    const ethProvider = provider || wallet.provider;
     if (!ethProvider) {
       throw new Error('No provider available for network detection');
     }
@@ -94,18 +96,18 @@ async function signOrder(maker, orderValue, provider = null) {
     const network = await ethProvider.getNetwork();
     
     // Load deployment addresses and config
-    const addresses = loadDeploymentAddresses(network.name);
+    const addresses = loadDeploymentAddresses('sepolia'); // Use hardcoded since we know it's sepolia
     
     // Create EIP-712 domain
     const domain = {
       name: DEFAULT_EIP712_DOMAIN.name,
-      version:  DEFAULT_EIP712_DOMAIN.version,
-      chainId: network.chainId,
+      version: DEFAULT_EIP712_DOMAIN.version,
+      chainId: Number(network.chainId),
       verifyingContract: addresses.limitOrderProtocol 
     };
 
     // Sign using EIP-712
-    const signature = await maker.signTypedData(domain, ORDER_TYPES, orderValue);
+    const signature = await wallet.signTypedData(domain, ORDER_TYPES, orderValue);
     console.log(`✅ Order signed: ${signature.slice(0, 20)}...`);
     
     return signature;
@@ -115,27 +117,25 @@ async function signOrder(maker, orderValue, provider = null) {
   }
 }
 
-async function createOrderHash(maker, orderValue, provider = null) {
+async function createOrderHash(orderValue) {
+    const provider = createProvider("sepolia", SEPOLIA_RPC_URL);
   try {
     console.log(`\n✍️  Creating order hash with EIP-712...`);
 
-    // Use provided provider or get from maker
-    const ethProvider = provider || maker.provider;
+    const ethProvider = provider;
     if (!ethProvider) {
       throw new Error('No provider available for network detection');
     }
     
-    // Get the network to determine the correct chain ID
     const network = await ethProvider.getNetwork();
     
-    // Load deployment addresses and config
-    const addresses = loadDeploymentAddresses(network.name);
+    const addresses = loadDeploymentAddresses('sepolia'); // Use hardcoded since we know it's sepolia
     
     // Create EIP-712 domain
     const domain = {
       name: DEFAULT_EIP712_DOMAIN.name,
-      version:  DEFAULT_EIP712_DOMAIN.version,
-      chainId: network.chainId,
+      version: DEFAULT_EIP712_DOMAIN.version,
+      chainId: Number(network.chainId),
       verifyingContract: addresses.limitOrderProtocol 
     };
 
@@ -151,7 +151,7 @@ async function createOrderHash(maker, orderValue, provider = null) {
  * Creates a provider for the specified network
  * @param {string} networkName - Network name
  * @param {string} rpcUrl - Optional custom RPC URL
- * @returns {ethers.providers.Provider} - Ethereum provider
+ * @returns {ethers.JsonRpcProvider} - Ethereum provider
  */
 const createProvider = (networkName, rpcUrl = null) => {
   try {
@@ -161,7 +161,7 @@ const createProvider = (networkName, rpcUrl = null) => {
     }
     
     const url = rpcUrl || network.rpcUrl;
-    return new ethers.providers.JsonRpcProvider(url);
+    return new ethers.JsonRpcProvider(url);
   } catch (error) {
     throw new Error(`Failed to create provider: ${error.message}`);
   }
@@ -170,7 +170,7 @@ const createProvider = (networkName, rpcUrl = null) => {
 /**
  * Creates a wallet from private key
  * @param {string} privateKey - Private key (with or without 0x prefix)
- * @param {ethers.providers.Provider} provider - Ethereum provider
+ * @param {ethers.JsonRpcProvider} provider - Ethereum provider
  * @returns {ethers.Wallet} - Wallet instance
  */
 const createWallet = (privateKey, provider) => {
@@ -187,20 +187,22 @@ const createWallet = (privateKey, provider) => {
 
 /**
  * Gets network information
- * @param {ethers.providers.Provider} provider - Ethereum provider
+ * @param {ethers.JsonRpcProvider} provider - Ethereum provider
  * @returns {Promise<Object>} - Network information
  */
 const getNetworkInfo = async (provider) => {
   try {
     const network = await provider.getNetwork();
     const blockNumber = await provider.getBlockNumber();
-    const gasPrice = await provider.getGasPrice();
+    const feeData = await provider.getFeeData();
     
     return {
-      chainId: network.chainId,
+      chainId: Number(network.chainId),
       name: network.name,
       blockNumber,
-      gasPrice: gasPrice.toString()
+      gasPrice: feeData.gasPrice ? feeData.gasPrice.toString() : null,
+      maxFeePerGas: feeData.maxFeePerGas ? feeData.maxFeePerGas.toString() : null,
+      maxPriorityFeePerGas: feeData.maxPriorityFeePerGas ? feeData.maxPriorityFeePerGas.toString() : null
     };
   } catch (error) {
     throw new Error(`Failed to get network info: ${error.message}`);
@@ -224,10 +226,10 @@ const estimateGas = async (contract, methodName, params = []) => {
 
 /**
  * Waits for transaction confirmation
- * @param {ethers.providers.Provider} provider - Ethereum provider
+ * @param {ethers.JsonRpcProvider} provider - Ethereum provider
  * @param {string} txHash - Transaction hash
  * @param {number} confirmations - Number of confirmations to wait for
- * @returns {Promise<ethers.providers.TransactionReceipt>} - Transaction receipt
+ * @returns {Promise<ethers.TransactionReceipt>} - Transaction receipt
  */
 const waitForTransaction = async (provider, txHash, confirmations = 1) => {
   try {
@@ -239,8 +241,7 @@ const waitForTransaction = async (provider, txHash, confirmations = 1) => {
     throw new Error(`Transaction wait failed: ${error.message}`);
   }
 };
-
-module.exports = {
+export{
   // Core functions
   signOrder,
   createOrderHash,

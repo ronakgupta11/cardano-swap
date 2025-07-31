@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 /**
  * @description Utility functions for secret management in cross-chain atomic swaps
@@ -225,7 +225,7 @@ const generateSecretPackage = (orderId) => {
 };
 
 
-module.exports = {
+export {
   generateRandomSecret,
   createSecretHash,
   createHashlock,

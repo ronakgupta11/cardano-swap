@@ -4,10 +4,13 @@
 
 // Order status constants
 
-const ETHEREUM_PRIVATE_KEY = "d1cc7ee1b0d79d2b7adb9bddc064786a4682a4f3a68996ebd8fbb027f5e68067";
-const RESOLVER_PK = "69b668b7f72339c8f7bf433837f444ff683ceb8e52dda30d26070db26e6bc756";
-const SEPOLIA_RPC_URL = "https://sepolia.infura.io/v3/2NPxpFpGyL6pa97niMJBOhznDDQ";
-const ETHERSCAN_API_KEY = "MQTI17UAF8U77DIRB2Z22QH2SVZ2PX9GDX";
+import dotenv from 'dotenv';
+dotenv.config();
+
+ const ETHEREUM_PRIVATE_KEY = process.env.ETHEREUM_PRIVATE_KEY;
+const RESOLVER_PK = process.env.RESOLVER_PK;
+const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
+const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
 
 const ADDRESSES = {
   "network": "sepolia",
@@ -72,12 +75,16 @@ const HTTP_STATUS = {
   INTERNAL_SERVER_ERROR: 500
 };
 
-module.exports = {
+export {
+    ETHEREUM_PRIVATE_KEY,
+    RESOLVER_PK,
+    SEPOLIA_RPC_URL,
+    ETHERSCAN_API_KEY,
+    ADDRESSES,
   ORDER_STATUSES,
   VALID_ORDER_STATUSES,
   SUPPORTED_CHAINS,
   PAGINATION,
   ERROR_MESSAGES,
   HTTP_STATUS,
-  ADDRESSES
 };

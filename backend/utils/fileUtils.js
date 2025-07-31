@@ -1,10 +1,9 @@
-import { Address, PrivateKey, PublicKey, Script } from "@harmoniclabs/plu-ts";
-import { readFile } from "fs/promises";
-
+import { readFile } from 'fs/promises';
+import { PrivateKey, PublicKey, Address, Script } from '@harmoniclabs/plu-ts';
 /**
  * Utility functions for file operations and key management
  */
-export class FileUtils {
+class FileUtils {
     /**
      * Read and parse a JSON file
      */
@@ -76,3 +75,6 @@ export class FileUtils {
         }
     }
 }
+
+
+export default FileUtils;

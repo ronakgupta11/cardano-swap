@@ -1,5 +1,5 @@
-const { DataTypes, or } = require('sequelize');
-const { sequelize } = require('../config/database');
+import { DataTypes } from 'sequelize';
+import { sequelize } from '../config/database.js'; 
 
 /**
  * @description Sequelize model for tracking cross-chain atomic swap orders.
@@ -89,9 +89,8 @@ const Order = sequelize.define('Order', {
 
   // Atomic Swap Primitives
   hashlock: {
-    type: DataTypes.STRING(64), // 32 bytes hex string (sha256)
+    type: DataTypes.STRING(66), // 32 bytes hex string with 0x prefix (sha256)
     allowNull: false,
-    unique: true,
     comment: 'The SHA-256 hash of the secret, used to link the two escrows.'
   },
   salt:{
@@ -163,4 +162,4 @@ const Order = sequelize.define('Order', {
   ]
 });
 
-module.exports = Order;
+export default Order;

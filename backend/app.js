@@ -1,12 +1,36 @@
 // Import required modules
-const express = require('express');
-const swaggerUi = require('swagger-ui-express');
-const swaggerJsdoc = require('swagger-jsdoc');
-const { testConnection } = require('./config/database');
-const { syncDatabase } = require('./models');
-const ordersRouter = require('./routes/orders');
-const relayerRouter = require('./routes/relayer');
-require('dotenv').config();
+import express from 'express';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+import dotenv from 'dotenv';
+
+// Import routers
+import ordersRouter from './routes/orders.js';
+import relayerRouter from './routes/relayer.js';
+
+// Import utility functions
+import { testConnection } from './config/database.js';
+import { syncDatabase } from './models/index.js';
+
+// Load environment variables
+dotenv.config();
+
+// Ensure environment variables are loaded
+if (!process.env.DB_DATABASE || !process.env.DB_USER || !process.env.DB_PASSWORD) {
+  throw new Error('Database configuration is missing in environment variables');
+}
+
+// Ensure the PORT is set
+if (!process.env.PORT) {
+  process.env.PORT = 3000; // Default port if not set
+}
+
+
+// Initialize dotenv for environment variables
+if (!process.env.ETHEREUM_PRIVATE_KEY || !process.env.SEPOLIA_RPC_URL) {
+  throw new Error('Required environment variables are missing');
+}
+
 
 // Create an Express application
 const app = express();

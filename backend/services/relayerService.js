@@ -119,4 +119,4 @@ class RelayerService {
   }
 }
 
-module.exports = new RelayerService();
+export default new RelayerService();

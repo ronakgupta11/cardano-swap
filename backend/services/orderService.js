@@ -1,40 +1,34 @@
-const { Order } = require('../models');
-const { Op } = require('sequelize');
-const { 
+
+import Order from '../models/Order.js';
+import { Op, or } from 'sequelize';
+import { 
   validateRequiredFields, 
   validateOrderStatus, 
   validateOrderAcceptance,
-  validatePaginationParams 
-} = require('../utils/validation');
-const { ORDER_STATUSES, ERROR_MESSAGES } = require('../utils/constants');
-const { generateRandomSecret } = require('../utils/secretManager');
-const { signOrder,createOrderHash } = require('../utils/ethUtils');
-const { createHashlock,storeSecretToLocalStorage } = require('../utils/secretManager');
-const { FileUtils } = require('../utils/fileUtils');
-const {UTxOUtils} = require('../utils/utxo');
-const blockfrost = require('../config/blockfrost');
-const getTxBuilder = require('../config/getTxBuilder');
+  validatePaginationParams,
+} from '../utils/validation.js';
+import { ORDER_STATUSES, ERROR_MESSAGES, ETHEREUM_PRIVATE_KEY } from '../utils/constants.js';
+import { signOrder, createOrderHash } from '../utils/ethUtils.js';
+import UTxOUtils from '../utils/utxo.js';
+import blockfrost from '../config/blockfrost.js';
+import getTxBuilder from '../config/getTxBuilder.js';
+import { loadValues } from "../utils/cardanoUtils.js";
+
+import { AuthVaultDatum } from "../contracts/cardano/Datum/index.js";
 import { 
-    Address, 
-    Credential, 
-    PrivateKey, 
     Value, 
     pBSToData, 
-    pByteString, 
+    pByteString,
     pIntToData,
-    CredentialType,
-    PublicKey,
-    Script,
-    ScriptType
 } from "@harmoniclabs/plu-ts";
+
 /**
  * @description Service layer for order business logic
- * All database operations and business rules are handled here
  */
 class OrderService {
   
   /**
-   * Creates a new order with validation
+   * Creates a new order with comprehensive validation and error handling
    * @param {Object} orderData - Order creation data
    * @returns {Promise<Object>} - Created order or error
    */
@@ -48,13 +42,91 @@ class OrderService {
       toAmount,
       makerSrcAddress,
       makerDstAddress,
+      hashlock
     } = orderData;
 
-    // Validate required fields
+    try {
+      const { makerAddress, authVaultAddr, makerPkh, makerPrivateKey, script } = await loadValues();
+      await this._validateOrderData(orderData);
+      
+      const salt = Math.floor(Math.random() * 1000000);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      let signature;
+      let orderHash;
+
+
+    //   Logger.info('Creating order', { fromChain, toChain, fromAmount, toAmount });
+
+      if (fromChain === "EVM" && toChain === "Cardano") {
+        const result = await this._handleEvmToCardanoOrder({
+          makerSrcAddress,
+          fromToken,
+          toToken,
+          fromAmount,
+          toAmount,
+          makerDstAddress,
+          hashlock,
+          salt,
+          expiresAt
+        });
+        signature = result.signature;
+        orderHash = result.orderHash;
+        
+      } else if (fromChain === "Cardano" && toChain === "EVM") {
+        const result = await this._handleCardanoToEvmOrder({
+          fromAmount,
+          makerDstAddress,
+          hashlock,
+          makerAddress,
+          authVaultAddr,
+          makerPkh,
+          makerPrivateKey,
+          script
+        });
+        signature = result.signature;
+        orderHash = result.orderHash;
+
+      } else {
+        throw new Error(`Unsupported chain combination: ${fromChain} -> ${toChain}`);
+      }
+
+      // Create order in database with transaction for atomicity
+      const newOrder = await this._createOrderInDatabase({
+        fromChain,
+        toChain,
+        fromToken,
+        toToken,
+        fromAmount,
+        toAmount,
+        makerSrcAddress,
+        makerDstAddress,
+        hashlock,
+        salt,
+        signature,
+        orderHash,
+        expiresAt
+      });
+
+    //   Logger.info('Order created successfully', { orderId: newOrder.id });
+      return { success: true,  newOrder };
+
+    } catch (error) {
+    //   Logger.error('Order creation failed', { error: error.message, stack: error.stack });
+      throw error;
+    }
+  }
+
+  /**
+   * Enhanced validation for order data
+   * @private
+   */
+  async _validateOrderData(orderData) {
+    // Basic required fields validation
     const requiredFields = [
       'fromChain', 'toChain', 'fromToken', 'toToken', 
       'fromAmount', 'toAmount', 'makerSrcAddress', 
-      'makerDstAddress'
+      'makerDstAddress', 'hashlock'
     ];
     
     const validation = validateRequiredFields(orderData, requiredFields);
@@ -62,152 +134,171 @@ class OrderService {
       throw new Error(`${ERROR_MESSAGES.MISSING_REQUIRED_FIELD}: ${validation.missingField}`);
     }
 
-    //business logic
-    if(fromChain === "EVM" && toChain === "Cardano") {
+    // // Validate amounts
+    // if (!validateAmount(fromAmount) || !validateAmount(toAmount)) {
+    //   throw new Error(ERROR_MESSAGES.INVALID_AMOUNT);
+    // }
 
-        const secret = generateRandomSecret();
-        const hashlock = createHashlock(secret);
-        const salt = Math.floor(Math.random() * 1000000); // Random salt for order signing
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+    // // Validate addresses based on chain
+    // if (fromChain === "EVM" && !validateAddress(makerSrcAddress, "EVM")) {
+    //   throw new Error(ERROR_MESSAGES.INVALID_EVM_ADDRESS);
+    // }
+    
+    // if (toChain === "Cardano" && !validateAddress(makerDstAddress, "Cardano")) {
+    //   throw new Error(ERROR_MESSAGES.INVALID_CARDANO_ADDRESS);
+    // }
 
-        const order = {
-            maker: makerSrcAddress,
-            makerAsset: fromToken, // Assuming fromToken is the EVM asset address
-            takerAsset: toToken,
-            makingAmount: fromAmount,
-            takingAmount: toAmount,
-            receiver: 0x0000000000000000000000000000000000000000, // Placeholder for resolver address
-            hashlock: hashlock,
-            salt: salt
-        };
+    // // Validate minimum amounts
+    // if (fromAmount < NETWORK_CONFIG.MIN_ORDER_AMOUNT) {
+    //   throw new Error(`Minimum order amount is ${NETWORK_CONFIG.MIN_ORDER_AMOUNT}`);
+    // }
+  }
 
-        const orderMetadata = {
-            adaAmount: toAmount,
-            cardanoAddress: makerDstAddress,
-            safetyDeposit: 0.01, // Example safety deposit
-            deadline:expiresAt,
-            createdAt: new Date().toISOString()
-        };
+  /**
+   * Handle EVM to Cardano order creation
+   * @private
+   */
+  async _handleEvmToCardanoOrder({
+    makerSrcAddress,
+    fromToken,
+    toToken,
+    fromAmount,
+    toAmount,
+    makerDstAddress,
+    hashlock,
+    salt,
+    expiresAt
+  }) {
+    const order = {
+      maker: makerSrcAddress,
+      makerAsset: fromToken,
+      takerAsset: toToken,
+      makingAmount: fromAmount,
+      takingAmount: toAmount,
+      receiver: '0x0000000000000000000000000000000000000000',
+      hashlock: hashlock,
+      salt: salt
+    };
 
-          // Create order hash for EIP-712 signing
-        const orderHash = await createOrderHash(order);
-        
+    const orderMetadata = {
+      adaAmount: toAmount,
+      cardanoAddress: makerDstAddress,
+      safetyDeposit: 0.01, // Default safety deposit
+      deadline: expiresAt,
+      createdAt: new Date().toISOString()
+    };
 
-        // Combine order with metadata for final signed order
-        const signedOrderData = {
-            ...order,
-            ...orderMetadata,
-            orderHash: orderHash
-        };
+    // Create order hash for EIP-712 signing
+    const orderHash = await createOrderHash(order);
+    
+    const signedOrderData = {
+      ...order,
+      ...orderMetadata,
+      orderHash: orderHash
+    };
 
-        const signature = await signOrder(makerSrcAddress, signedOrderData);
-
-        storeSecretToLocalStorage(orderHash,secret);
-        // Create the order in the database
-        const newOrder = await Order.create({
-          fromChain,
-          toChain,
-          fromToken,
-          toToken,
-          fromAmount,
-          toAmount,
-          makerSrcAddress,
-          makerDstAddress,
-          hashlock,
-          salt,
-          signature,
-          expiresAt,
-          status: ORDER_STATUSES.PENDING,
-          orderHash,
-        });
-
-
-        return { success: true, data: newOrder };
+    const signature = await signOrder(ETHEREUM_PRIVATE_KEY, signedOrderData);
 
 
+    
+    return { signature, orderHash };
+  }
+
+  /**
+   * Handle Cardano to EVM order creation
+   * @private
+   */
+  async _handleCardanoToEvmOrder({ fromAmount, makerDstAddress, hashlock, makerAddress, authVaultAddr, makerPkh, makerPrivateKey, script }) {
+    try {
+      const Blockfrost = blockfrost();
+      const txBuilder = await getTxBuilder(Blockfrost);
+      
+      // Get UTXOs with proper error handling
+      const utxos = await Blockfrost.addressUtxos(makerAddress.toString());
+      if (utxos.length === 0) {
+        throw new Error("No UTXOs found at maker address. Please ensure the address has sufficient funds.");
+      }
+
+      // Calculate required amount including fees and buffer
+      // Convert ADA to lovelaces (1 ADA = 1,000,000 lovelaces)
+      const feeBuffer = BigInt(2_000_000); // 2 ADA fee buffer in lovelaces
+      const fromAmountLovelaces = BigInt(Math.floor(parseFloat(fromAmount) * 1_000_000)); // Convert ADA to lovelaces
+      const requiredAmount = Value.lovelaces(fromAmountLovelaces + feeBuffer);
+       
+      const selectedUtxo = UTxOUtils.findUtxoWithFunds(utxos, requiredAmount);
+      if (!selectedUtxo) {
+        throw new Error(`Insufficient funds. Required: ${requiredAmount}, but no suitable UTXO found.`);
+      }
+
+      // Build transaction
+      const tx = txBuilder.buildSync({
+        inputs: [{ 
+          utxo: UTxOUtils.convertUtxo(selectedUtxo)
+        }],
+        collaterals: [UTxOUtils.convertUtxo(selectedUtxo)],
+        outputs: [{
+          address: authVaultAddr.toString(),
+          value: Value.lovelaces(fromAmountLovelaces), // Use the converted lovelaces amount
+          datum: AuthVaultDatum.AuthVaultDatum({
+            maker_pkh: pBSToData.$(pByteString(makerPkh.toBuffer())),
+            expected_escrow_script_hash: pBSToData.$(pByteString(script.hash.toBuffer())),
+            maker_input_value: pIntToData.$(Number(fromAmountLovelaces)) // Use lovelaces in datum
+          })
+        }],
+        changeAddress: makerAddress.toString()
+      });
+
+      // Sign transaction
+    //   Logger.info("Signing Cardano transaction...");
+      await tx.signWith(makerPrivateKey);
+      
+      // Submit transaction
+    //   Logger.info("Submitting transaction to Cardano network...");
+      const txHash = await Blockfrost.submitTx(tx.toCbor().toString());
+      
+      if (!txHash) {
+        throw new Error("Failed to submit transaction to Cardano network");
+      }
+
+    //   Logger.info("Cardano transaction submitted successfully", { txHash });
+      
+      // For Cardano orders, create a unique order hash by combining tx hash with timestamp
+      // This ensures uniqueness even if multiple orders use the same transaction
+      const timestamp = Date.now();
+      const orderHash = `${txHash}_${timestamp}`;
+      
+      return { 
+        signature: txHash, // Use txHash as signature for Cardano orders
+        orderHash: orderHash // Use combined hash for uniqueness
+      };
+
+    } catch (error) {
+    //   Logger.error("Cardano transaction failed", { error: error.message });
+      throw new Error(`Cardano transaction failed: ${error.message}`);
     }
-    else{
-
-        const Blockfrost = blockfrost();
-        const txBuilder = await getTxBuilder(Blockfrost);
-
-        const script = await FileUtils.loadScript("../testnet/atomic-swap.plutus.json", ScriptType.PlutusV3);
-        const scriptAddr = new Address("testnet", new Credential(CredentialType.Script, script.hash));
-
-        const makerPrivateKey = await FileUtils.loadPrivateKey("./testnet/payment1.skey");
-        const makerAddress = await FileUtils.loadAddress("./testnet/address1.addr");
-        
-        const takerPublicKey = await FileUtils.loadPublicKey("./testnet/payment2.vkey");
-        const takerPkh = takerPublicKey.hash;
-
-        const secret = generateRandomSecret();
-
-        const hashlock = createHashlock(secret);
-        const salt = Math.floor(Math.random() * 1000000); // Random salt for order signing
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
-
-        const utxos = await Blockfrost.addressUtxos(makerAddress.toString());
-        if (utxos.length === 0) {
-                    throw new Error("No UTXOs found at the maker address. Ensure the address has funds.");
-                }
-
-        const requiredAmount = finalConfig.escrowAmount + finalConfig.safetyDeposit + BigInt(5_000_000); // Add buffer for fees
-        const selectedUtxo = UTxOUtils.findUtxoWithFunds(utxos, requiredAmount);
-
-        const now = Date.now();
-        const resolverDeadline = now + (finalConfig.deadlineOffset * 3600000);
-        const cancelDeadline = now + (finalConfig.cancelOffset * 3600000);
-        const publicDeadline = now + (finalConfig.publicOffset * 3600000);
+  }
 
 
-        const tx = txBuilder.buildSync({
-            inputs: [{ 
-                utxo: UTxOUtils.convertUtxo(selectedUtxo)
-            }],
-            collaterals: [UTxOUtils.convertUtxo(selectedUtxo)],
-            outputs: [{
-                address: scriptAddr.toString(),
-                value: Value.lovelaces(finalConfig.escrowAmount + finalConfig.safetyDeposit),
-                datum: EscrowDatum.EscrowDatum({
-                    hashlock: pBSToData.$(pByteString(hashlock)),
-                    maker_pkh: pBSToData.$(pByteString(makerAddress.paymentCreds.hash.toBuffer())),
-                    resolver_pkh: pBSToData.$(pByteString(takerPkh.toBuffer())),
-                    resolver_unlock_deadline: pIntToData.$(resolverDeadline),
-                    resolver_cancel_deadline: pIntToData.$(cancelDeadline),
-                    public_cancel_deadline: pIntToData.$(publicDeadline),
-                    safety_deposit: pIntToData.$(Number(0.01* 1_000_000)), // Convert ADA to lovelaces
-                })
-            }],
-            changeAddress: makerAddress.toString()
-        });
 
-         await tx.signWith(makerPrivateKey);
+  /**
+   * Create order in database with transaction
+   * @private
+   */
+  async _createOrderInDatabase(orderData) {
+    const transaction = await Order.sequelize.transaction();
+    
+    try {
+      const newOrder = await Order.create({
+        ...orderData,
+        status: ORDER_STATUSES.PENDING,
+      }, { transaction });
 
-        const submittedTx = await Blockfrost.submitTx(tx.toCbor().toString());
-
-        // Store the secret in localStorage for later retrieval
-        storeSecretToLocalStorage(newOrder.id, secret);
-
-        // Create the order in the database
-   
-        const newOrder = await Order.create({
-                fromChain,
-                toChain,
-                fromToken,
-                toToken,
-                fromAmount,
-                toAmount,
-                makerSrcAddress,
-                makerDstAddress,
-                hashlock,
-                signature: tx.toCbor().toString(),
-                expiresAt: new Date(expiresAt),
-                relayerFee,
-                status: ORDER_STATUSES.PENDING
-            });
-
-        return { success: true, data: newOrder };
-
+      await transaction.commit();
+      return newOrder;
+      
+    } catch (error) {
+      await transaction.rollback();
+      throw new Error(`Database operation failed: ${error.message}`);
     }
   }
 
@@ -334,4 +425,4 @@ class OrderService {
   }
 }
 
-module.exports = new OrderService();
+export default new OrderService();

@@ -1,9 +1,7 @@
-const express = require('express');
-const { 
-  getRelayerStatus, 
-  getRelayerStats, 
-  processOrder 
-} = require('../controllers/relayerController');
+import express from 'express';
+import { getRelayerStatus, getRelayerStats, processOrder } from '../controllers/relayerController.js';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
 
 const router = express.Router();
 
@@ -100,4 +98,4 @@ router.get('/stats', getRelayerStats);
  */
 router.post('/process/:orderId', processOrder);
 
-module.exports = router;
+export default router;

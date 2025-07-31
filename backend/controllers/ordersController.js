@@ -1,6 +1,5 @@
-const orderService = require('../services/orderService');
-const { handleServiceError } = require('../utils/errorHandler');
-
+import orderService from '../services/orderService.js';
+import { handleServiceError } from '../utils/errorHandler.js';
 /**
  * @description Creates a new swap order.
  * This is typically called by the Maker's client.
@@ -79,7 +78,7 @@ const updateOrderStatus = async (req, res) => {
 };
 
 
-module.exports = {
+export {
   createOrder,
   getAllOrders,
   getOrderById,

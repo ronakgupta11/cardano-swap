@@ -1,7 +1,7 @@
 /**
  * @description Validation utilities for order processing
  */
-const { VALID_ORDER_STATUSES, PAGINATION } = require('./constants');
+import { VALID_ORDER_STATUSES, PAGINATION } from './constants.js';
 
 /**
  * Validates required fields for order creation
@@ -56,7 +56,7 @@ const validatePaginationParams = (params) => {
   return { page, limit };
 };
 
-module.exports = {
+export {
   validateRequiredFields,
   validateOrderStatus,
   validateOrderAcceptance,

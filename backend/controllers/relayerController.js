@@ -1,6 +1,5 @@
-const relayerService = require('../services/relayerService');
-const { handleServiceError } = require('../utils/errorHandler');
-
+import relayerService from '../services/relayerService.js';
+import { handleServiceError } from '../utils/errorHandler.js';
 // Get relayer status
 const getRelayerStatus = async (req, res) => {
   try {
@@ -41,7 +40,7 @@ const getOrderProcessingStatus = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   getRelayerStatus,
   getRelayerStats,
   processOrder,

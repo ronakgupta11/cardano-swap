@@ -1,9 +1,9 @@
-import { IUTxO, Value, Address } from "@harmoniclabs/plu-ts";
+import{Value} from "@harmoniclabs/plu-ts"
 
 /**
  * Utility functions for UTXO operations
  */
-export class UTxOUtils {
+class UTxOUtils {
     /**
      * Extract lovelaces from a Value object
      */
@@ -53,3 +53,6 @@ export class UTxOUtils {
     }
 
 }
+
+
+export default UTxOUtils;
