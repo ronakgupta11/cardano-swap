@@ -1,6 +1,5 @@
 
 import Order from '../models/Order.js';
-import { Op, or } from 'sequelize';
 import { 
   validateRequiredFields, 
   validateOrderStatus, 
@@ -8,11 +7,12 @@ import {
   validatePaginationParams,
 } from '../utils/validation.js';
 import { ORDER_STATUSES, ERROR_MESSAGES, ETHEREUM_PRIVATE_KEY } from '../utils/constants.js';
-import { signOrder, createOrderHash } from '../utils/ethUtils.js';
+import { signOrder, createOrderHash, createProvider } from '../utils/ethUtils.js';
 import UTxOUtils from '../utils/utxo.js';
 import blockfrost from '../config/blockfrost.js';
 import getTxBuilder from '../config/getTxBuilder.js';
 import { loadValues } from "../utils/cardanoUtils.js";
+import { ADDRESSES, SEPOLIA_RPC_URL } from '../utils/constants.js';
 
 import { AuthVaultDatum } from "../contracts/cardano/Datum/index.js";
 import { 
@@ -21,6 +21,18 @@ import {
     pByteString,
     pIntToData,
 } from "@harmoniclabs/plu-ts";
+import { ethers } from 'ethers';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Read the JSON file synchronously
+const LimitOrderProtocolABI = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../utils/LimitOrderProtocol.json'), 'utf8')
+);
 
 /**
  * @description Service layer for order business logic
@@ -59,11 +71,14 @@ class OrderService {
     //   Logger.info('Creating order', { fromChain, toChain, fromAmount, toAmount });
 
       if (fromChain === "EVM" && toChain === "Cardano") {
+        // Convert fromAmount to wei (assuming ETH or 18-decimal tokens)
+        const fromAmountWei = ethers.parseEther(fromAmount.toString());
+        
         const result = await this._handleEvmToCardanoOrder({
           makerSrcAddress,
           fromToken,
           toToken,
-          fromAmount,
+          fromAmount: fromAmountWei,
           toAmount,
           makerDstAddress,
           hashlock,
@@ -199,11 +214,50 @@ class OrderService {
 
     const signature = await signOrder(ETHEREUM_PRIVATE_KEY, signedOrderData);
 
+    // Create provider and signer
+    const provider = createProvider("sepolia", SEPOLIA_RPC_URL);
+    const signer = new ethers.Wallet(ETHEREUM_PRIVATE_KEY, provider);
 
+    // Get the LOP contract using ABI
+    const lop = new ethers.Contract(ADDRESSES.limitOrderProtocol, LimitOrderProtocolABI.abi, signer);
     
-    return { signature, orderHash };
-  }
+    if(fromToken === "0x0000000000000000000000000000000000000000") {
+      const preInteractionTx = await lop.preInteraction(order, signature, {
+        value: fromAmount
+      });
+      
+      console.log(`📋 Transaction hash: ${preInteractionTx.hash}`);
+      console.log(`⏳ Waiting for confirmation...`);
+      
+      const receipt = await preInteractionTx.wait();
+      console.log(`✅ PreInteraction completed in block ${receipt.blockNumber}`);
 
+      }
+    else {
+      // approve token to lop
+      const tokenContract = new ethers.Contract(fromToken, [
+        "function approve(address spender, uint256 amount) external returns (bool)"
+      ], signer);
+      
+      const approveTx = await tokenContract.approve(ADDRESSES.limitOrderProtocol, fromAmount);
+      
+      console.log(`📋 Approve transaction hash: ${approveTx.hash}`);
+      console.log(`⏳ Waiting for approval confirmation...`);
+      
+      const receipt = await approveTx.wait();
+      console.log(`✅ Token approved in block ${receipt.blockNumber}`);
+
+      // Now call preInteraction
+      const preInteractionTx = await lop.preInteraction(order, signature);
+      
+      console.log(`📋 Transaction hash: ${preInteractionTx.hash}`);
+      console.log(`⏳ Waiting for confirmation...`);
+      
+      const preReceipt = await preInteractionTx.wait();
+      console.log(`✅ PreInteraction completed in block ${preReceipt.blockNumber}`);
+    }
+      return { signature, orderHash };
+}
   /**
    * Handle Cardano to EVM order creation
    * @private
@@ -264,8 +318,7 @@ class OrderService {
       
       // For Cardano orders, create a unique order hash by combining tx hash with timestamp
       // This ensures uniqueness even if multiple orders use the same transaction
-      const timestamp = Date.now();
-      const orderHash = `${txHash}_${timestamp}`;
+      const orderHash = txHash
       
       return { 
         signature: txHash, // Use txHash as signature for Cardano orders
