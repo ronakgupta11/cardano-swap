@@ -4,6 +4,8 @@ import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
 import "./globals.css"
 import { Toaster } from "@/components/toaster"
+import { Providers } from "@/components/providers"
+
 
 export const metadata: Metadata = {
   title: "v0 App",
@@ -28,7 +30,9 @@ html {
         `}</style>
       </head>
       <body>
-        {children}
+      <Providers>
+          {children}
+      </Providers>
         <Toaster />
       </body>
     </html>

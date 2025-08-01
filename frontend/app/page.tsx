@@ -6,12 +6,14 @@ import { OrdersDashboard } from "@/components/orders-dashboard"
 import { OrderDetail } from "@/components/order-detail"
 import { Button } from "@/components/ui/button"
 import { ArrowLeftRight, List, Zap } from "lucide-react"
+import { useWallet } from "@meshsdk/react"
+import { useEthereumWallet } from "@/hooks/use-ethereum-wallet"
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<"swap" | "orders" | "order-detail">("swap")
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
-  const [isEvmWalletConnected, setIsEvmWalletConnected] = useState(false)
-  const [isCardanoWalletConnected, setIsCardanoWalletConnected] = useState(false)
+  const { connected } = useWallet()
+  const { isConnected: isEvmWalletConnected, connect: connectEvmWallet } = useEthereumWallet()
 
   const handleViewOrderDetail = (orderId: string) => {
     setSelectedOrderId(orderId)
@@ -31,7 +33,7 @@ export default function Home() {
               <h1 className="text-xl font-bold text-white">CardanoSwap</h1>
             </div>
 
-            {(isEvmWalletConnected || isCardanoWalletConnected) && (
+            {(isEvmWalletConnected || connected) && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 <span className="text-sm text-slate-300">Connected</span>
@@ -70,18 +72,14 @@ export default function Home() {
         {currentView === "swap" && (
           <SwapInterface
             isEvmWalletConnected={isEvmWalletConnected}
-            isCardanoWalletConnected={isCardanoWalletConnected}
-            onEvmWalletConnect={() => setIsEvmWalletConnected(true)}
-            onCardanoWalletConnect={() => setIsCardanoWalletConnected(true)}
+            onEvmWalletConnect={connectEvmWallet}
           />
         )}
 
         {currentView === "orders" && (
           <OrdersDashboard
             isEvmWalletConnected={isEvmWalletConnected}
-            isCardanoWalletConnected={isCardanoWalletConnected}
-            onEvmWalletConnect={() => setIsEvmWalletConnected(true)}
-            onCardanoWalletConnect={() => setIsCardanoWalletConnected(true)}
+            onEvmWalletConnect={connectEvmWallet}
             onViewDetail={handleViewOrderDetail}
           />
         )}

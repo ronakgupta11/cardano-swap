@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Clock, CheckCircle, AlertCircle, ExternalLink, Wallet, Eye } from "lucide-react"
+import { useWallet } from "@meshsdk/react"
 
 interface Order {
   id: string
@@ -75,9 +76,7 @@ const mockOrders: Order[] = [
 
 interface OrdersDashboardProps {
   isEvmWalletConnected: boolean
-  isCardanoWalletConnected: boolean
   onEvmWalletConnect: () => void
-  onCardanoWalletConnect: () => void
   onViewDetail: (orderId: string) => void
 }
 
@@ -113,12 +112,11 @@ const getStatusColor = (status: Order["status"]) => {
 
 export function OrdersDashboard({
   isEvmWalletConnected,
-  isCardanoWalletConnected,
   onEvmWalletConnect,
-  onCardanoWalletConnect,
   onViewDetail,
 }: OrdersDashboardProps) {
   const [activeTab, setActiveTab] = useState("all")
+  const { connected, connect } = useWallet()
 
   const filterOrders = (status?: Order["status"]) => {
     if (!status) return mockOrders
@@ -252,15 +250,15 @@ export function OrdersDashboard({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div
-                    className={`w-2 h-2 rounded-full ${isCardanoWalletConnected ? "bg-green-400" : "bg-slate-500"}`}
+                    className={`w-2 h-2 rounded-full ${connected ? "bg-green-400" : "bg-slate-500"}`}
                   ></div>
                   <span className="text-sm text-slate-300">Cardano Wallet</span>
                 </div>
-                {!isCardanoWalletConnected && (
+                {!connected && (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={onCardanoWalletConnect}
+                    onClick={() => connect('nami')}
                     className="text-xs border-slate-600 text-slate-300 bg-transparent"
                   >
                     <Wallet className="w-3 h-3 mr-1" />
