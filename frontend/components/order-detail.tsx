@@ -4,6 +4,43 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Clock, CheckCircle, AlertCircle, ExternalLink, Copy, ArrowUpDown } from "lucide-react";
+import { useCardanoWallet } from "@/context/WalletContext";
+import { useEthereumWallet } from "@/hooks/use-ethereum-wallet";
+import EscrowFactory from "@/lib/EscrowFactory.json";
+import LimitOrderProtocol from "@/lib/LimitOrderProtocol.json";
+import { ADDRESSES } from "@/lib/constants";
+import {writeContract,readContract, sendTransaction, waitForTransactionReceipt} from "@wagmi/core"
+import { config } from "@/lib/wagmi";
+import { parseEther } from "viem";
+import blockfrost from "@/lib/blockfrost"
+import getTxBuilder from "@/lib/getTxBuilder"
+
+import { ScriptType, CredentialType, Address, Credential, Script, int, PPubKeyHash, bs, pstruct } from '@harmoniclabs/plu-ts';
+import scriptData from "@/testnet/atomic-swap.plutus.json"
+import authVaultData from "@/testnet/auth-vault.plutus.json"
+import { toPlutsUtxo } from "@/lib/meshUtils"
+import UTxOUtils from "@/lib/utxo"
+import { Value } from "@harmoniclabs/plu-ts"
+import { pBSToData, pIntToData, pByteString } from "@harmoniclabs/plu-ts"
+
+ const EscrowDatum = pstruct({
+  EscrowDatum: {
+    hashlock: bs, // The SHA-256 hash of the secret, provided by the Maker.
+    maker_pkh: PPubKeyHash.type, // The public key hash of the Maker.
+    resolver_pkh: PPubKeyHash.type, // The public key hash of the Resolver who filled the order.
+    resolver_unlock_deadline: int, // Deadline for the exclusive withdrawal period.
+    resolver_cancel_deadline: int, // Deadline for the exclusive cancellation period.
+    public_cancel_deadline: int, // The final deadline for public cancellation.
+    safety_deposit: int // The safety deposit amount to be locked in the contract.
+  }
+}); 
+
+const AuthVaultRedeemer = pstruct({
+  CreateEscrow: {
+      resolver_pkh: PPubKeyHash.type,
+      safety_deposit_amount: int
+  }
+});
 
 interface OrderDetailProps {
   orderId: string;
@@ -18,6 +55,8 @@ interface Order {
   toAmount: string;
   fromChain: string;
   toChain: string;
+  hashlock: string;
+  orderHash: string;
   status: "pending" | "completed" | "failed" | "available";
   timestamp: string;
   createdAt: string;
@@ -27,7 +66,9 @@ interface Order {
   exchangeRate: string;
   fromAddress: string;
   toAddress: string;
-  steps: Array<{ step: number; description: string; status: string; timestamp: string }>;
+  makerSrcAddress: string;
+  makerDstAddress: string;  
+  steps: Array<{ step: number; description: string; status: string; timestamp: string,action:string }>;
 }
 
 const getStatusIcon = (status: string) => {
@@ -60,28 +101,33 @@ const getStatusColor = (status: string) => {
   }
 };
 
+
+const script = Script.fromCbor(scriptData.cborHex, ScriptType.PlutusV3);;
+const scriptAddr = new Address("testnet", new Credential(CredentialType.Script, script.hash));
+
+
+ const authVaultScript = Script.fromCbor(authVaultData.cborHex,  ScriptType.PlutusV3);
+ const authVaultAddr = new Address("testnet", new Credential(CredentialType.Script, authVaultScript.hash));
+
+
+
 const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text);
 };
 
 const generateOrderSteps = (order: Order) => {
   const steps = [
-    { step: 1, description: "Order Created", status: "completed", timestamp: order.createdAt },
-    { step: 2, description: "Source Escrow Deployed", status: "pending", timestamp: "" },
-    { step: 3, description: "Destination Escrow Deployed", status: "pending", timestamp: "" },
-    { step: 4, description: "Secret Shared", status: "pending", timestamp: "" },
-    { step: 5, description: "Order Completed", status: "pending", timestamp: "" },
+    { step: 1, description: "Order Created", status: "completed", timestamp: order.createdAt ,action: ""},
+    { step: 2, description: "Source Escrow Deployed", status: "pending", timestamp: "",action: "deploySrcEscrow" },
+    { step: 3, description: "Destination Escrow Deployed", status: "pending", timestamp: "",action: "deployDstEscrow" },
+    { step: 4, description: "Secret Shared", status: "pending", timestamp: "",action: "shareSecret" },
+    { step: 5, description: "Order Completed", status: "pending", timestamp: "",action: "completeOrder" },
   ];
 
   // Update step statuses based on order status
   if (order.status === "completed") {
     steps.forEach(step => step.status = "completed");
-  } else if (order.status === "available") {
-    steps[0].status = "completed";
-    steps[1].status = "completed";
-    steps[2].status = "completed";
-    steps[3].status = "completed";
-  } else if (order.status === "pending") {
+  }  else if (order.status === "pending") {
     steps[0].status = "completed";
   }
 
@@ -90,6 +136,8 @@ const generateOrderSteps = (order: Order) => {
 
 export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   const [order, setOrder] = useState<Order | null>(null);
+  const { address: cardanoAddress ,wallet: cardanoWallet} = useCardanoWallet();
+  const { address: evmAddress } = useEthereumWallet();
 
   useEffect(() => {
     // Fetch order details based on orderId
@@ -111,6 +159,286 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   }
 
   const steps = generateOrderSteps(order);
+  const isMaker = order.makerSrcAddress === evmAddress || order.makerDstAddress === cardanoAddress;
+
+  const handleStepAction = (action: string) => {
+    console.log("handleStepAction", action);
+    // Update the step status to completed
+    const updatedSteps = steps.map((step) => {
+      if (step.action === action) {
+        return { ...step, status: "completed" };
+      }
+      return step;
+    });
+    setOrder((prevOrder) => ({ ...prevOrder, steps: updatedSteps }) as Order);
+  };
+
+
+  const handleDeploySrcEscrow = async () => {
+
+    if (order.fromChain === "EVM") {
+      const immutables = {
+        orderHash: order.orderHash,
+        hashlock: order.hashlock,
+        maker: order.makerSrcAddress,
+        taker: evmAddress, // Resolver becomes the taker
+        token: order.fromToken,
+        amount: order.fromAmount,
+        safetyDeposit: 0.01,
+        timelocks: "0x0000000000000000000000000000000000000000000000000000000000000000"
+      };
+      const srcEscrowAddress = await readContract(config,{
+        abi: EscrowFactory.abi,
+        address: ADDRESSES.cardanoEscrowFactory as `0x${string}`,
+        functionName: 'addressOfEscrowSrc',
+        args: [immutables],
+      });
+      
+      const preFundTx = await sendTransaction(config, {
+        to: srcEscrowAddress as `0x${string}`,
+        value: parseEther("0.01"),
+      })
+      console.log(`📋 Transaction hash: ${preFundTx}`);
+
+      const receipt = await waitForTransactionReceipt(config, {
+        hash: preFundTx,
+      });
+      console.log(`✅ PreFund completed in block ${receipt.blockNumber}`);
+
+      const postInteractionTx = await writeContract(config,{
+        abi: LimitOrderProtocol.abi,
+        address: ADDRESSES.limitOrderProtocol as `0x${string}`,
+        functionName: 'postInteraction',
+        args: [order.orderHash,
+          ADDRESSES.cardanoEscrowFactory,
+          "0.01"],
+      });
+      console.log(`📋 Transaction hash: ${postInteractionTx}`);
+
+      const receipt2 = await waitForTransactionReceipt(config, {
+        hash: postInteractionTx,
+      });
+      console.log(`✅ PostFund completed in block ${receipt2.blockNumber}`);
+
+
+    }
+    else{
+
+      const Blockfrost = blockfrost();
+      const txBuilder = await getTxBuilder(Blockfrost);
+
+      const authVaultUtxos = await Blockfrost.addressUtxos(authVaultAddr.toString());
+      const authVaultUtxo = authVaultUtxos.find(utxo => 
+        utxo.utxoRef.id.toString() === order.orderHash && 
+        utxo.utxoRef.index === 0
+    );
+      const escrowAmount = UTxOUtils.getLovelaces(authVaultUtxo?.resolved.value);
+      const authVaultDatum = authVaultUtxo?.resolved.datum;
+
+      const resolver =  Address.fromString(
+        await cardanoWallet?.getChangeAddress() as any
+      );
+    
+      console.log('Resolver:', resolver);
+      const resolverPkh =  resolver.paymentCreds.hash.toBuffer()
+
+      const maker =  Address.fromString(order.makerSrcAddress);
+      const makerPkh =  maker.paymentCreds.hash.toBuffer()
+
+      const resolverUtxos = (await cardanoWallet?.getUtxos())?.map(toPlutsUtxo);
+      console.log('Retrieved UTXOs:', resolverUtxos);
+
+      const selectedResolverUtxo = UTxOUtils.findUtxoWithFunds(resolverUtxos, 15_000_000);//safetydeposit + fee
+      console.log('Resolver UTXO:', selectedResolverUtxo);
+
+      const now = Date.now();
+      const resolverDeadline = now + (1 * 3600000);
+      const cancelDeadline = now + (2 * 3600000);
+      const publicDeadline = now + (3 * 3600000);
+
+
+      const totalEscrowValue = BigInt(escrowAmount) + BigInt(10_000_000);
+      // Build transaction
+      const tx = txBuilder.buildSync({
+        inputs: [
+            { 
+                utxo: UTxOUtils.convertUtxo(authVaultUtxo),
+                inputScript: {
+                    script: authVaultScript,
+                    datum: "inline",
+                    redeemer: (() => {
+                        const redeemer = AuthVaultRedeemer.CreateEscrow({
+                            resolver_pkh: pBSToData.$(pByteString(resolverPkh)),
+                            safety_deposit_amount: pIntToData.$(Number(10_000_000))
+                        });
+                       
+                        return redeemer;
+                    })()
+                }
+            },
+            // Input 2: Spend from resolver's wallet for safety deposit
+            { 
+                utxo: UTxOUtils.convertUtxo(selectedResolverUtxo)
+            }
+        ],
+        collaterals: [UTxOUtils.convertUtxo(selectedResolverUtxo)],
+        outputs: [
+            // Output 1: Create the final escrow UTXO
+            {
+                address: scriptAddr.toString(),
+                value: Value.lovelaces(totalEscrowValue),
+                datum: (() => {
+                    const datum = EscrowDatum.EscrowDatum({
+                        hashlock: pBSToData.$(pByteString(order.hashlock)),
+                        maker_pkh: pBSToData.$(pByteString(makerPkh)),
+                        resolver_pkh: pBSToData.$(pByteString(resolverPkh)),
+                        resolver_unlock_deadline: pIntToData.$(resolverDeadline),
+                        resolver_cancel_deadline: pIntToData.$(cancelDeadline),
+                        public_cancel_deadline: pIntToData.$(publicDeadline),
+                        safety_deposit: pIntToData.$(Number(10_000_000))
+                    });
+                    return datum;
+                })()
+            }
+        ],
+        changeAddress: cardanoAddress as any,
+        requiredSigners: [resolverPkh as any] // Only resolver needs to sign
+    });
+
+      console.log('Transaction built:', tx);
+  
+      // Sign transaction
+      const signedTx = await cardanoWallet?.signTx(tx.toCbor().toString());
+      console.log('Transaction signed:', signedTx);
+  
+      // Submit transaction
+      const txHash = await cardanoWallet?.submitTx(signedTx as any);
+      console.log('Transaction submitted. Hash:', txHash);
+  
+      if (!txHash) {
+        throw new Error("Failed to submit transaction to Cardano network");
+      }
+  
+      console.log("Cardano transaction submitted successfully", { txHash });
+
+
+
+    }
+
+    // const response = await fetch(`http://localhost:3000/api/orders/${orderId}/deploy-src-escrow`);
+    // const data = await response.json();
+    // console.log(data);
+  }
+
+
+  const handleDeployDstEscrow = async () => {
+    if (order.toChain === "EVM") {
+      const immutables = {
+        orderHash: order.orderHash,
+        hashlock: order.hashlock,
+        maker: order.makerDstAddress,
+        taker: evmAddress, // Resolver becomes the taker
+        token: order.toToken,
+        amount: order.toAmount,
+        safetyDeposit: 0.01,
+        timelocks: "0x0000000000000000000000000000000000000000000000000000000000000000"
+      };
+
+
+      const dstEscrowCreationTx = await writeContract(config,{
+        abi: EscrowFactory.abi,
+        address: ADDRESSES.cardanoEscrowFactory as `0x${string}`,
+        functionName: 'createEscrowDst',
+        args: [immutables],
+        value: parseEther((Number(order.toAmount) + 0.01).toString()),
+      });
+      console.log(`📋 Transaction hash: ${dstEscrowCreationTx}`);
+
+      const receipt2 = await waitForTransactionReceipt(config, {
+        hash: dstEscrowCreationTx,
+      })
+      console.log(`✅ Escrow created in block ${receipt2.blockNumber}`);
+
+    }
+    else{
+      const Blockfrost = blockfrost();
+      const txBuilder = await getTxBuilder(Blockfrost);
+
+      const resolver =  Address.fromString(
+        await cardanoWallet?.getChangeAddress() as any
+      );
+    
+      console.log('Resolver:', resolver);
+      const resolverPkh =  resolver.paymentCreds.hash.toBuffer()
+
+      const maker =  Address.fromString(order.makerDstAddress);
+      const makerPkh =  maker.paymentCreds.hash.toBuffer()
+
+      const resolverUtxos = (await cardanoWallet?.getUtxos())?.map(toPlutsUtxo);
+      console.log('Retrieved UTXOs:', resolverUtxos);
+
+      const selectedResolverUtxo = UTxOUtils.findUtxoWithFunds(resolverUtxos, BigInt(Number(order.toAmount)*1000000 + 10_000_000 + 2_000_000));//safetydeposit + fee
+      console.log('Resolver UTXO:', selectedResolverUtxo);
+
+      const now = Date.now();
+      const resolverDeadline = now + (1 * 3600000);
+      const cancelDeadline = now + (2 * 3600000);
+      const publicDeadline = now + (3 * 3600000);
+
+
+      // Build transaction
+      const tx = txBuilder.buildSync({
+        inputs: [
+          
+            { 
+                utxo: UTxOUtils.convertUtxo(selectedResolverUtxo)
+            }
+        ],
+        collaterals: [UTxOUtils.convertUtxo(selectedResolverUtxo)],
+        outputs: [
+            // Output 1: Create the final escrow UTXO
+            {
+                address: scriptAddr.toString(),
+                value: Value.lovelaces(BigInt(Number(order.toAmount)*1000000 + 10_000_000)),
+                datum: (() => {
+                    const datum = EscrowDatum.EscrowDatum({
+                        hashlock: pBSToData.$(pByteString(order.hashlock)),
+                        maker_pkh: pBSToData.$(pByteString(makerPkh)),
+                        resolver_pkh: pBSToData.$(pByteString(resolverPkh)),
+                        resolver_unlock_deadline: pIntToData.$(resolverDeadline),
+                        resolver_cancel_deadline: pIntToData.$(cancelDeadline),
+                        public_cancel_deadline: pIntToData.$(publicDeadline),
+                        safety_deposit: pIntToData.$(Number(10_000_000))
+                    });
+                    return datum;
+                })()
+            }
+        ],
+        changeAddress: cardanoAddress as any,
+        requiredSigners: [resolverPkh as any] // Only resolver needs to sign
+    });
+
+      console.log('Transaction built:', tx);
+  
+      // Sign transaction
+      const signedTx = await cardanoWallet?.signTx(tx.toCbor().toString());
+      console.log('Transaction signed:', signedTx);
+  
+      // Submit transaction
+      const txHash = await cardanoWallet?.submitTx(signedTx as any);
+      console.log('Transaction submitted. Hash:', txHash);
+  
+      if (!txHash) {
+        throw new Error("Failed to submit transaction to Cardano network");
+      }
+  
+      console.log("Cardano transaction submitted successfully", { txHash });
+
+
+
+      
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -259,6 +587,16 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
                 <div className="flex-1 pt-1">
                   <div className="text-white text-sm">{step.description}</div>
                   {step.timestamp && <div className="text-slate-400 text-xs mt-1">{step.timestamp}</div>}
+                  {!isMaker && step.status !== "completed" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-2 text-xs border-slate-600 text-slate-300 bg-transparent hover:bg-slate-700"
+                      onClick={() => handleStepAction(step.action)}
+                    >
+                      Complete Step
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}

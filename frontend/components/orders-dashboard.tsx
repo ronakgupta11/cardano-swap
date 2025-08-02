@@ -152,9 +152,11 @@ export function OrdersDashboard({
     setMakerOrders(filteredOrders);
   }, [orders, evmAddress, cardanoAddress]);
 
-  const filterOrders = (status?: Order["status"]) => {
-    if (!status) return orders;
-    return orders?.filter((order) => order?.status === status);
+  const filterOrders = () => {
+    const nonMakerOrders = orders?.filter(order =>
+      order.makerSrcAddress !== evmAddress && order.makerSrcAddress !== cardanoAddress && order.makerDstAddress !== evmAddress && order.makerDstAddress !== cardanoAddress
+    );
+    return nonMakerOrders
   };
 
   const getActionButtons = (order: Order) => {
@@ -271,44 +273,21 @@ export function OrdersDashboard({
 
       {/* Orders Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5 bg-slate-800/50 border border-slate-700">
-          <TabsTrigger value="all" className="text-slate-300 data-[state=active]:text-white text-xs">
-            All ({orders?.length})
-          </TabsTrigger>
-          <TabsTrigger value="pending" className="text-slate-300 data-[state=active]:text-white text-xs">
-            Pending ({filterOrders("pending")?.length})
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 border border-slate-700">
+
+
           <TabsTrigger value="available" className="text-slate-300 data-[state=active]:text-white text-xs">
-            Available ({filterOrders("available")?.length})
-          </TabsTrigger>
-          <TabsTrigger value="completed" className="text-slate-300 data-[state=active]:text-white text-xs">
-            Completed ({filterOrders("completed")?.length})
+            Available ({filterOrders()?.length})
           </TabsTrigger>
           <TabsTrigger value="maker" className="text-slate-300 data-[state=active]:text-white text-xs">
             My Orders ({makerOrders.length})
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="all" className="space-y-3 mt-4">
-          {orders.map((order) => (
-            <OrderListItem key={order.id} order={order} />
-          ))}
-        </TabsContent>
 
-        <TabsContent value="pending" className="space-y-3 mt-4">
-          {filterOrders("pending").map((order) => (
-            <OrderListItem key={order.id} order={order} />
-          ))}
-        </TabsContent>
 
         <TabsContent value="available" className="space-y-3 mt-4">
-          {filterOrders("available").map((order) => (
-            <OrderListItem key={order.id} order={order} />
-          ))}
-        </TabsContent>
-
-        <TabsContent value="completed" className="space-y-3 mt-4">
-          {filterOrders("completed").map((order) => (
+          {filterOrders().map((order) => (
             <OrderListItem key={order.id} order={order} />
           ))}
         </TabsContent>
