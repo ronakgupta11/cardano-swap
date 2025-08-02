@@ -15,8 +15,8 @@
 const ADDRESSES = {
   "network": "sepolia",
   "chainId": 11155111,
-  "accessToken": "0x7563F2D779e0F8be890DBa6aaA6b9AC5B88093F3",
-  "cardanoEscrowFactory": "0xfd58bAed5BcD4A7db3B7a0285a82855881748549",
+  "accessToken": "0xfE31A69264fec44007Fece974E005fD3145E62C5",
+  "cardanoEscrowFactory": "0x93645a4F513B846f4F1A3A66dd72Ad1fae4dB0fC",
   "limitOrderProtocol": "0x5ce0524525EaB2f570D37FDE4cDD2fAf40629cAF",
   "cardanoEscrowSrcImplementation": "0x71A6FFEB517c388Ef0C974263FBCB861BdAA0d52",
   "cardanoEscrowDstImplementation": "0x7949497338822A18AA94491BD80DeCd90EDC8472",
