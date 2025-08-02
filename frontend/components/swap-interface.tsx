@@ -413,8 +413,12 @@ export function SwapInterface({
         signature,
         orderHash
       }
+      console.log('New order data:', newOrderData);
       const response = await fetch('http://localhost:3000/api/orders', {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify(newOrderData),
       });
       const data = await response.json();

@@ -23,8 +23,8 @@ export const WalletProvider = ({ children }: { children: ReactNode }) => {
       const selectedWallet = availableWallets[0];
       const walletInstance = await BrowserWallet.enable(selectedWallet.name);
       setIsConnected(true);
-      const addresses = await walletInstance.getUsedAddresses();
-      setAddress(addresses[0]);
+      const address = await walletInstance.getChangeAddress();
+      setAddress(address);
       setWallet(walletInstance);
     }
   };

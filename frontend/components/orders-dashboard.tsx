@@ -9,6 +9,7 @@ import { Clock, CheckCircle, AlertCircle, ExternalLink, Wallet, Eye } from "luci
 import { useCardanoWallet } from "@/context/WalletContext"
 import CardanoWalletButton from "./cardano-wallet"
 import EthereumWalletButton from "./ethereum-wallet"
+import { useEthereumWallet } from "@/hooks/use-ethereum-wallet"
 
 interface Order {
   id: string
@@ -22,59 +23,61 @@ interface Order {
   timestamp: string
   txHash?: string
   estimatedTime?: string
+  makerSrcAddress: string
+  makerDstAddress: string
 }
 
-const mockOrders: Order[] = [
-  {
-    id: "1",
-    fromToken: "ETH",
-    toToken: "ADA",
-    fromAmount: "1.0",
-    toAmount: "8133.33",
-    fromChain: "Ethereum",
-    toChain: "Cardano",
-    status: "pending",
-    timestamp: "2 minutes ago",
-    txHash: "0x1234...5678",
-    estimatedTime: "~15 minutes",
-  },
-  {
-    id: "2",
-    fromToken: "ETH",
-    toToken: "ADA",
-    fromAmount: "0.5",
-    toAmount: "4066.67",
-    fromChain: "Ethereum",
-    toChain: "Cardano",
-    status: "available",
-    timestamp: "15 minutes ago",
-    txHash: "0xabcd...efgh",
-  },
-  {
-    id: "3",
-    fromToken: "ETH",
-    toToken: "ADA",
-    fromAmount: "2.0",
-    toAmount: "16266.66",
-    fromChain: "Ethereum",
-    toChain: "Cardano",
-    status: "completed",
-    timestamp: "1 hour ago",
-    txHash: "0x9876...5432",
-  },
-  {
-    id: "4",
-    fromToken: "ETH",
-    toToken: "ADA",
-    fromAmount: "0.25",
-    toAmount: "2033.33",
-    fromChain: "Ethereum",
-    toChain: "Cardano",
-    status: "failed",
-    timestamp: "3 hours ago",
-    txHash: "0xdef0...1234",
-  },
-]
+// const mockOrders: Order[] = [
+//   {
+//     id: "1",
+//     fromToken: "ETH",
+//     toToken: "ADA",
+//     fromAmount: "1.0",
+//     toAmount: "8133.33",
+//     fromChain: "Ethereum",
+//     toChain: "Cardano",
+//     status: "pending",
+//     timestamp: "2 minutes ago",
+//     txHash: "0x1234...5678",
+//     estimatedTime: "~15 minutes",
+//   },
+//   {
+//     id: "2",
+//     fromToken: "ETH",
+//     toToken: "ADA",
+//     fromAmount: "0.5",
+//     toAmount: "4066.67",
+//     fromChain: "Ethereum",
+//     toChain: "Cardano",
+//     status: "available",
+//     timestamp: "15 minutes ago",
+//     txHash: "0xabcd...efgh",
+//   },
+//   {
+//     id: "3",
+//     fromToken: "ETH",
+//     toToken: "ADA",
+//     fromAmount: "2.0",
+//     toAmount: "16266.66",
+//     fromChain: "Ethereum",
+//     toChain: "Cardano",
+//     status: "completed",
+//     timestamp: "1 hour ago",
+//     txHash: "0x9876...5432",
+//   },
+//   {
+//     id: "4",
+//     fromToken: "ETH",
+//     toToken: "ADA",
+//     fromAmount: "0.25",
+//     toAmount: "2033.33",
+//     fromChain: "Ethereum",
+//     toChain: "Cardano",
+//     status: "failed",
+//     timestamp: "3 hours ago",
+//     txHash: "0xdef0...1234",
+//   },
+// ]
 
 interface OrdersDashboardProps {
   isEvmWalletConnected: boolean
@@ -112,21 +115,50 @@ const getStatusColor = (status: Order["status"]) => {
   }
 }
 
+import { useEffect } from "react";
+
 export function OrdersDashboard({
   isEvmWalletConnected,
   onEvmWalletConnect,
   onViewDetail,
 }: OrdersDashboardProps) {
-  const [activeTab, setActiveTab] = useState("all")
-  const { isConnected, connect,disconnect,address } = useCardanoWallet()
+  const [activeTab, setActiveTab] = useState("all");
+  const { isConnected, connect, disconnect, address: cardanoAddress } = useCardanoWallet();
+  const { address: evmAddress } = useEthereumWallet();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [makerOrders, setMakerOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
+    // Fetch orders from the backend
+    const fetchOrders = async () => {
+      try {
+        const response = await fetch('http://localhost:3000/api/orders');
+        const data = await response.json();
+
+        setOrders(data.orders);
+      } catch (error) {
+        console.error('Failed to fetch orders:', error);
+      }
+    };
+
+    fetchOrders();
+  }, []);
+
+  useEffect(() => {
+    // Filter orders created by the maker
+    const filteredOrders = orders?.filter(order =>
+      order.makerSrcAddress === evmAddress || order.makerSrcAddress === cardanoAddress || order.makerDstAddress === evmAddress || order.makerDstAddress === cardanoAddress
+    );
+    setMakerOrders(filteredOrders);
+  }, [orders, evmAddress, cardanoAddress]);
 
   const filterOrders = (status?: Order["status"]) => {
-    if (!status) return mockOrders
-    return mockOrders.filter((order) => order.status === status)
-  }
+    if (!status) return orders;
+    return orders?.filter((order) => order?.status === status);
+  };
 
   const getActionButtons = (order: Order) => {
-    const buttons = []
+    const buttons = [];
 
     // View Details button (always available)
     buttons.push(
@@ -140,7 +172,7 @@ export function OrdersDashboard({
         <Eye className="w-3 h-3 mr-1" />
         View
       </Button>,
-    )
+    );
 
     // Status-specific action button
     switch (order.status) {
@@ -149,8 +181,8 @@ export function OrdersDashboard({
           <Button key="withdraw" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
             Withdraw
           </Button>,
-        )
-        break
+        );
+        break;
       case "failed":
         buttons.push(
           <Button
@@ -161,12 +193,12 @@ export function OrdersDashboard({
           >
             Retry
           </Button>,
-        )
-        break
+        );
+        break;
     }
 
-    return buttons
-  }
+    return buttons;
+  };
 
   const OrderListItem = ({ order }: { order: Order }) => (
     <Card className="bg-slate-800/50 border-slate-700 hover:bg-slate-800/70 transition-colors">
@@ -188,11 +220,11 @@ export function OrdersDashboard({
             <div className="flex items-center gap-4">
               <div className="text-sm text-white">
                 <span className="font-medium">
-                  {order.fromAmount} {order.fromToken}
+                  {order.fromAmount} {order.fromChain === "EVM" ? "ETH" : "ADA"}
                 </span>
                 <span className="text-slate-400 mx-2">→</span>
                 <span className="font-medium">
-                  {order.toAmount} {order.toToken}
+                  {order.toAmount} {order.toChain === "EVM" ? "ETH" : "ADA"}
                 </span>
               </div>
             </div>
@@ -210,7 +242,7 @@ export function OrdersDashboard({
         </div>
       </CardContent>
     </Card>
-  )
+  );
 
   return (
     <div className="space-y-6">
@@ -239,23 +271,26 @@ export function OrdersDashboard({
 
       {/* Orders Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4 bg-slate-800/50 border border-slate-700">
+        <TabsList className="grid w-full grid-cols-5 bg-slate-800/50 border border-slate-700">
           <TabsTrigger value="all" className="text-slate-300 data-[state=active]:text-white text-xs">
-            All ({mockOrders.length})
+            All ({orders?.length})
           </TabsTrigger>
           <TabsTrigger value="pending" className="text-slate-300 data-[state=active]:text-white text-xs">
-            Pending ({filterOrders("pending").length})
+            Pending ({filterOrders("pending")?.length})
           </TabsTrigger>
           <TabsTrigger value="available" className="text-slate-300 data-[state=active]:text-white text-xs">
-            Available ({filterOrders("available").length})
+            Available ({filterOrders("available")?.length})
           </TabsTrigger>
           <TabsTrigger value="completed" className="text-slate-300 data-[state=active]:text-white text-xs">
-            Completed ({filterOrders("completed").length})
+            Completed ({filterOrders("completed")?.length})
+          </TabsTrigger>
+          <TabsTrigger value="maker" className="text-slate-300 data-[state=active]:text-white text-xs">
+            My Orders ({makerOrders.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="space-y-3 mt-4">
-          {mockOrders.map((order) => (
+          {orders.map((order) => (
             <OrderListItem key={order.id} order={order} />
           ))}
         </TabsContent>
@@ -277,9 +312,15 @@ export function OrdersDashboard({
             <OrderListItem key={order.id} order={order} />
           ))}
         </TabsContent>
+
+        <TabsContent value="maker" className="space-y-3 mt-4">
+          {makerOrders.map((order) => (
+            <OrderListItem key={order.id} order={order} />
+          ))}
+        </TabsContent>
       </Tabs>
 
-      {mockOrders.length === 0 && (
+      {orders.length === 0 && (
         <div className="text-center py-12">
           <div className="text-slate-400 mb-2">No orders found</div>
           <p className="text-sm text-slate-500">Your swap orders will appear here</p>

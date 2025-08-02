@@ -1,77 +1,116 @@
 "use client"
-
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Clock, CheckCircle, AlertCircle, ExternalLink, Copy, ArrowUpDown } from "lucide-react"
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Clock, CheckCircle, AlertCircle, ExternalLink, Copy, ArrowUpDown } from "lucide-react";
 
 interface OrderDetailProps {
-  orderId: string
-  onBack: () => void
+  orderId: string;
+  onBack: () => void;
 }
 
-// Mock order data - in real app, this would be fetched based on orderId
-const mockOrderDetail = {
-  id: "1",
-  fromToken: "ETH",
-  toToken: "ADA",
-  fromAmount: "1.0",
-  toAmount: "8133.33",
-  fromChain: "Ethereum",
-  toChain: "Cardano",
-  status: "pending" as const,
-  timestamp: "2 minutes ago",
-  createdAt: "2024-01-15 14:30:25 UTC",
-  txHash: "0x1234567890abcdef1234567890abcdef12345678",
-  estimatedTime: "~15 minutes",
-  fee: "0.1%",
-  exchangeRate: "1 ETH = 8133.33 ADA",
-  fromAddress: "0xabcd...1234",
-  toAddress: "addr1qxy2...5678",
-  steps: [
-    { step: 1, description: "Transaction submitted to Ethereum", status: "completed", timestamp: "14:30:25" },
-    { step: 2, description: "Waiting for confirmations (12/12)", status: "completed", timestamp: "14:32:15" },
-    { step: 3, description: "Processing cross-chain transfer", status: "pending", timestamp: "" },
-    { step: 4, description: "ADA ready for withdrawal", status: "pending", timestamp: "" },
-  ],
+interface Order {
+  id: string;
+  fromToken: string;
+  toToken: string;
+  fromAmount: string;
+  toAmount: string;
+  fromChain: string;
+  toChain: string;
+  status: "pending" | "completed" | "failed" | "available";
+  timestamp: string;
+  createdAt: string;
+  txHash: string;
+  estimatedTime: string;
+  fee: string;
+  exchangeRate: string;
+  fromAddress: string;
+  toAddress: string;
+  steps: Array<{ step: number; description: string; status: string; timestamp: string }>;
 }
 
 const getStatusIcon = (status: string) => {
   switch (status) {
     case "pending":
-      return <Clock className="w-4 h-4 text-yellow-500" />
+      return <Clock className="w-4 h-4 text-yellow-500" />;
     case "completed":
-      return <CheckCircle className="w-4 h-4 text-green-500" />
+      return <CheckCircle className="w-4 h-4 text-green-500" />;
     case "failed":
-      return <AlertCircle className="w-4 h-4 text-red-500" />
+      return <AlertCircle className="w-4 h-4 text-red-500" />;
     case "available":
-      return <ExternalLink className="w-4 h-4 text-blue-500" />
+      return <ExternalLink className="w-4 h-4 text-blue-500" />;
     default:
-      return null
+      return null;
   }
-}
+};
 
 const getStatusColor = (status: string) => {
   switch (status) {
     case "pending":
-      return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"
+      return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
     case "completed":
-      return "bg-green-500/20 text-green-300 border-green-500/30"
+      return "bg-green-500/20 text-green-300 border-green-500/30";
     case "failed":
-      return "bg-red-500/20 text-red-300 border-red-500/30"
+      return "bg-red-500/20 text-red-300 border-red-500/30";
     case "available":
-      return "bg-blue-500/20 text-blue-300 border-blue-500/30"
+      return "bg-blue-500/20 text-blue-300 border-blue-500/30";
     default:
-      return "bg-slate-500/20 text-slate-300 border-slate-500/30"
+      return "bg-slate-500/20 text-slate-300 border-slate-500/30";
   }
-}
+};
 
 const copyToClipboard = (text: string) => {
-  navigator.clipboard.writeText(text)
-}
+  navigator.clipboard.writeText(text);
+};
+
+const generateOrderSteps = (order: Order) => {
+  const steps = [
+    { step: 1, description: "Order Created", status: "completed", timestamp: order.createdAt },
+    { step: 2, description: "Source Escrow Deployed", status: "pending", timestamp: "" },
+    { step: 3, description: "Destination Escrow Deployed", status: "pending", timestamp: "" },
+    { step: 4, description: "Secret Shared", status: "pending", timestamp: "" },
+    { step: 5, description: "Order Completed", status: "pending", timestamp: "" },
+  ];
+
+  // Update step statuses based on order status
+  if (order.status === "completed") {
+    steps.forEach(step => step.status = "completed");
+  } else if (order.status === "available") {
+    steps[0].status = "completed";
+    steps[1].status = "completed";
+    steps[2].status = "completed";
+    steps[3].status = "completed";
+  } else if (order.status === "pending") {
+    steps[0].status = "completed";
+  }
+
+  return steps;
+};
 
 export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
-  const order = mockOrderDetail
+  const [order, setOrder] = useState<Order | null>(null);
+
+  useEffect(() => {
+    // Fetch order details based on orderId
+    const fetchOrderDetail = async () => {
+      try {
+        const response = await fetch(`http://localhost:3000/api/orders/${orderId}`);
+        const data = await response.json();
+        setOrder(data);
+      } catch (error) {
+        console.error('Failed to fetch order details:', error);
+      }
+    };
+
+    fetchOrderDetail();
+  }, [orderId]);
+
+  if (!order) {
+    return <div>Loading...</div>;
+  }
+
+  const steps = generateOrderSteps(order);
 
   return (
     <div className="space-y-6">
@@ -106,13 +145,13 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
           <div className="flex items-center justify-center gap-4 p-4 bg-slate-900/50 rounded-lg">
             <div className="text-center">
               <div className="text-2xl font-bold text-white">{order.fromAmount}</div>
-              <div className="text-sm text-slate-400">{order.fromToken}</div>
+              <div className="text-sm text-slate-400">{order.fromChain === "EVM" ? "ETH" : "ADA"}</div>
               <div className="text-xs text-slate-500">{order.fromChain}</div>
             </div>
             <ArrowUpDown className="w-6 h-6 text-slate-400" />
             <div className="text-center">
               <div className="text-2xl font-bold text-white">{order.toAmount}</div>
-              <div className="text-sm text-slate-400">{order.toToken}</div>
+              <div className="text-sm text-slate-400">{order.toChain === "EVM" ? "ETH" : "ADA"}</div>
               <div className="text-xs text-slate-500">{order.toChain}</div>
             </div>
           </div>
@@ -197,7 +236,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         <CardContent className="p-4">
           <h3 className="text-white font-medium mb-4">Progress</h3>
           <div className="space-y-4">
-            {order.steps.map((step, index) => (
+            {steps.map((step, index) => (
               <div key={step.step} className="flex items-start gap-3">
                 <div className="flex flex-col items-center">
                   <div
@@ -211,7 +250,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
                   >
                     {step.status === "completed" ? "✓" : step.step}
                   </div>
-                  {index < order.steps.length - 1 && (
+                  {index < steps.length - 1 && (
                     <div
                       className={`w-0.5 h-8 mt-2 ${step.status === "completed" ? "bg-green-500" : "bg-slate-600"}`}
                     />
@@ -234,5 +273,5 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         </Button>
       )}
     </div>
-  )
+  );
 }
