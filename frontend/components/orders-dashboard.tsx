@@ -6,7 +6,9 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Clock, CheckCircle, AlertCircle, ExternalLink, Wallet, Eye } from "lucide-react"
-import { useWallet } from "@meshsdk/react"
+import { useCardanoWallet } from "@/context/WalletContext"
+import CardanoWalletButton from "./cardano-wallet"
+import EthereumWalletButton from "./ethereum-wallet"
 
 interface Order {
   id: string
@@ -116,7 +118,7 @@ export function OrdersDashboard({
   onViewDetail,
 }: OrdersDashboardProps) {
   const [activeTab, setActiveTab] = useState("all")
-  const { connected, connect } = useWallet()
+  const { isConnected, connect,disconnect,address } = useCardanoWallet()
 
   const filterOrders = (status?: Order["status"]) => {
     if (!status) return mockOrders
@@ -223,49 +225,13 @@ export function OrdersDashboard({
         <div className="grid grid-cols-2 gap-3">
           <Card className="bg-slate-800/30 border-slate-700">
             <CardContent className="p-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-2 h-2 rounded-full ${isEvmWalletConnected ? "bg-green-400" : "bg-slate-500"}`}
-                  ></div>
-                  <span className="text-sm text-slate-300">EVM Wallet</span>
-                </div>
-                {!isEvmWalletConnected && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={onEvmWalletConnect}
-                    className="text-xs border-slate-600 text-slate-300 bg-transparent"
-                  >
-                    <Wallet className="w-3 h-3 mr-1" />
-                    Connect
-                  </Button>
-                )}
-              </div>
+             <EthereumWalletButton/>
             </CardContent>
           </Card>
 
           <Card className="bg-slate-800/30 border-slate-700">
             <CardContent className="p-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-2 h-2 rounded-full ${connected ? "bg-green-400" : "bg-slate-500"}`}
-                  ></div>
-                  <span className="text-sm text-slate-300">Cardano Wallet</span>
-                </div>
-                {!connected && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => connect('nami')}
-                    className="text-xs border-slate-600 text-slate-300 bg-transparent"
-                  >
-                    <Wallet className="w-3 h-3 mr-1" />
-                    Connect
-                  </Button>
-                )}
-              </div>
+             <CardanoWalletButton/>
             </CardContent>
           </Card>
         </div>

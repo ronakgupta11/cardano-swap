@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { ArrowUpDown, ChevronDown, Wallet, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { useWallet, useWalletList } from "@meshsdk/react"
+import { useCardanoWallet } from "@/context/WalletContext"
 import CardanoWalletButton from "./cardano-wallet"
 import EthereumWalletButton from "./ethereum-wallet"
 
@@ -49,7 +49,8 @@ export function SwapInterface({
   const [fromAmount, setFromAmount] = useState("1")
   const [toAmount, setToAmount] = useState("8133.33")
   const [swapDirection, setSwapDirection] = useState<"evm-to-cardano" | "cardano-to-evm">("evm-to-cardano")
-  const { wallet, connected, name, connecting, connect, disconnect } = useWallet();
+  const { wallet, isConnected, address } = useCardanoWallet();
+
 
   const [isSwapping, setIsSwapping] = useState(false)
   const { toast } = useToast()
@@ -93,13 +94,28 @@ export function SwapInterface({
 
   const canSwap =
     (swapDirection === "evm-to-cardano"
-      ? isEvmWalletConnected && connected
-      : isEvmWalletConnected && connected) && Number.parseFloat(fromAmount) > 0
+      ? isEvmWalletConnected && isConnected
+      : isEvmWalletConnected && isConnected) && Number.parseFloat(fromAmount) > 0
 
-      console.log("available:", useWalletList())
 
   return (
     <div className="space-y-4">
+          {/* Wallet Connection Status */}
+          <div className="grid grid-cols-2 gap-3">
+          <Card className="bg-slate-800/30 border-slate-700">
+            <CardContent className="p-3">
+             <EthereumWalletButton/>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-800/30 border-slate-700">
+            <CardContent className="p-3">
+             <CardanoWalletButton/>
+            </CardContent>
+          </Card>
+        </div>
+   
+
       {/* From Token */}
       <Card className="bg-slate-800/50 border-slate-700">
         <CardContent className="p-4">
@@ -107,12 +123,6 @@ export function SwapInterface({
             <span className="text-slate-400 text-sm">
               You pay ({swapDirection === "evm-to-cardano" ? "EVM" : "Cardano"})
             </span>
-            {((swapDirection === "evm-to-cardano" && !isEvmWalletConnected) ||
-              (swapDirection === "cardano-to-evm" && !connected)) && (
-               swapDirection === "evm-to-cardano" ?  
-              
-              <EthereumWalletButton />:<CardanoWalletButton/>
-            )}
           </div>
         
 
@@ -203,12 +213,6 @@ export function SwapInterface({
             <span className="text-slate-400 text-sm">
               You receive ({swapDirection === "evm-to-cardano" ? "Cardano" : "EVM"})
             </span>
-            {((swapDirection === "evm-to-cardano" && !connected) ||
-              (swapDirection === "cardano-to-evm" && !isEvmWalletConnected)) && (
-                swapDirection === "evm-to-cardano" ?  <CardanoWalletButton/>
-                :
-              <EthereumWalletButton />
-            )}
           </div>
 
           <div className="flex items-center justify-between">
@@ -323,17 +327,17 @@ export function SwapInterface({
             <Loader2 className="w-4 h-4 animate-spin" />
             Processing...
           </div>
-        ) : !isEvmWalletConnected && !connected ? (
+        ) : !isEvmWalletConnected && !isConnected ? (
           "Connect Both Wallets to Swap"
         ) : swapDirection === "evm-to-cardano" ? (
           !isEvmWalletConnected ? (
             "Connect EVM Wallet"
-          ) : !connected ? (
+          ) : !isConnected ? (
             "Connect Cardano Wallet"
           ) : (
             "Permit and Swap"
           )
-        ) : !connected ? (
+        ) : !isConnected ? (
           "Connect Cardano Wallet"
         ) : !isEvmWalletConnected ? (
           "Connect EVM Wallet"
