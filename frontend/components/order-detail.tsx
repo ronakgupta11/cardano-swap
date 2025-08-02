@@ -75,11 +75,13 @@ interface Order {
   toAddress: string;
   srcWithdrawTxHash: string | null;
   dstWithdrawTxHash: string | null;
+  srcEscrowTxHash: string | null;
+  dstEscrowTxHash: string | null;
   escrowSrcAddress: string | null;
   escrowDstAddress: string | null;
   makerSrcAddress: string;
   makerDstAddress: string;  
-  steps: Array<{ step: number; description: string; status: string; timestamp: string,action:string }>;
+  steps: Array<{ step: number; description: string; status: string; timestamp: string,action:string,href:string }>;
 }
 
 const getStatusIcon = (status: string) => {
@@ -128,13 +130,13 @@ const copyToClipboard = (text: string) => {
 
 const generateOrderSteps = (order: Order) => {
   const steps = [
-    { step: 1, description: "Order Created", status: "completed", timestamp: order.createdAt ,action: ""},
-    { step: 2, description: "Source Escrow Deployed", status: order.escrowSrcAddress ? "completed" : "pending", timestamp: "",action: "deploySrcEscrow" },
-    { step: 3, description: "Destination Escrow Deployed", status: order.escrowDstAddress ? "completed" : "pending", timestamp: "",action: "deployDstEscrow" },
-    { step: 4, description: "Secret Shared", status: "pending", timestamp: "", action: "shareSecret" },
-    { step: 5, description: "Withdraw for Maker", status: order.dstWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawMaker" },
-    { step: 6, description: "Withdraw for Resolver", status: order.srcWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawResolver" },
-    { step: 7, description: "Order Completed", status: "pending", timestamp: "", action: "completeOrder" }
+    { step: 1, description: "Order Created", status: "completed", timestamp: order.createdAt ,action: "",href: ""},
+    { step: 2, description: "Source Escrow Deployed", status: order.escrowSrcAddress ? "completed" : "pending", timestamp: "",action: "deploySrcEscrow",href: order.fromChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.srcEscrowTxHash}` : "https://sepolia.etherscan.io/tx/" + order.srcEscrowTxHash },
+    { step: 3, description: "Destination Escrow Deployed", status: order.escrowDstAddress ? "completed" : "pending", timestamp: "",action: "deployDstEscrow",href: order.toChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.dstEscrowTxHash}` : "https://sepolia.etherscan.io/tx/" + order.dstEscrowTxHash },
+    { step: 4, description: "Secret Shared", status: "pending", timestamp: "", action: "shareSecret",href: "" },
+    { step: 5, description: "Withdraw for Maker", status: order.dstWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawMaker",href: order.toChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.dstWithdrawTxHash}` : "https://sepolia.etherscan.io/tx/" + order.dstWithdrawTxHash },
+    { step: 6, description: "Withdraw for Resolver", status: order.srcWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawResolver",href: order.fromChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.srcWithdrawTxHash}` : "https://sepolia.etherscan.io/tx/" + order.srcWithdrawTxHash },
+    { step: 7, description: "Order Completed", status: "pending", timestamp: "", action: "completeOrder",href: "" }
   ];
 
   // Update step statuses based on order status
@@ -908,11 +910,11 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
               <div>
                 <span className="text-slate-400 text-sm">From Address:</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-mono text-sm">{order.fromAddress}</span>
+                  <span className="text-white font-mono text-sm">{order.makerSrcAddress.slice(0, 6)}...{order.makerSrcAddress.slice(-4)}</span>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => copyToClipboard(order.fromAddress)}
+                    onClick={() => copyToClipboard(order.makerSrcAddress)}
                     className="h-6 w-6 p-0 text-slate-400 hover:text-white"
                   >
                     <Copy className="w-3 h-3" />
@@ -922,11 +924,11 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
               <div>
                 <span className="text-slate-400 text-sm">To Address:</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-mono text-sm">{order.toAddress}</span>
+                  <span className="text-white font-mono text-sm">{order.makerDstAddress.slice(0, 6)}...{order.makerDstAddress.slice(-4)}</span>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => copyToClipboard(order.toAddress)}
+                    onClick={() => copyToClipboard(order.makerDstAddress)}
                     className="h-6 w-6 p-0 text-slate-400 hover:text-white"
                   >
                     <Copy className="w-3 h-3" />
@@ -981,7 +983,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
               </div>
               <div className="flex-1 pt-1">
                 <div className="text-white text-sm">{step.description}</div>
-                {step.timestamp && <div className="text-slate-400 text-xs mt-1">{step.timestamp}</div>}
+                {step.status === "completed" && step.href !== "" && <a href={step.href} target="_blank" className="text-slate-400 text-xs mt-1">verify on chain</a>}
                 {!isMaker && step.status !== "completed" && (
                   <Button
                     size="sm"
