@@ -543,6 +543,17 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       });
       const data = await response.json();
       console.log(data);
+
+
+      const response2 = await fetch(`http://localhost:3000/api/orders/${order.id}/tx-hash`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ srcEscrowTxHash: postInteractionTx }),
+      });
+      const data2 = await response2.json();
+      console.log(data2);
     }
     else{
 
@@ -652,6 +663,16 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       const data = await response.json();
       console.log(data);
 
+      const response2 = await fetch(`http://localhost:3000/api/orders/${order.id}/tx-hash`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ srcEscrowTxHash: txHash }),
+      });
+      const data2 = await response2.json();
+      console.log(data2);
+
     }
 
     // const response = await fetch(`http://localhost:3000/api/orders/${orderId}/deploy-src-escrow`);
@@ -704,6 +725,16 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       });
       const data = await response.json();
       console.log(data);
+
+      const response2 = await fetch(`http://localhost:3000/api/orders/${order.id}/tx-hash`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dstEscrowTxHash: dstEscrowCreationTx }),
+      });
+      const data2 = await response2.json();
+      console.log(data2);
     }
     else{
       const Blockfrost = blockfrost();
@@ -788,6 +819,16 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       });
       const data = await response.json();
       console.log(data);
+
+      const response2 = await fetch(`http://localhost:3000/api/orders/${order.id}/tx-hash`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dstEscrowTxHash: txHash }),
+      });
+      const data2 = await response2.json();
+      console.log(data2);
 
       
     }
