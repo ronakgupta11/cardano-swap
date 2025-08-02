@@ -27,57 +27,6 @@ interface Order {
   makerDstAddress: string
 }
 
-// const mockOrders: Order[] = [
-//   {
-//     id: "1",
-//     fromToken: "ETH",
-//     toToken: "ADA",
-//     fromAmount: "1.0",
-//     toAmount: "8133.33",
-//     fromChain: "Ethereum",
-//     toChain: "Cardano",
-//     status: "pending",
-//     timestamp: "2 minutes ago",
-//     txHash: "0x1234...5678",
-//     estimatedTime: "~15 minutes",
-//   },
-//   {
-//     id: "2",
-//     fromToken: "ETH",
-//     toToken: "ADA",
-//     fromAmount: "0.5",
-//     toAmount: "4066.67",
-//     fromChain: "Ethereum",
-//     toChain: "Cardano",
-//     status: "available",
-//     timestamp: "15 minutes ago",
-//     txHash: "0xabcd...efgh",
-//   },
-//   {
-//     id: "3",
-//     fromToken: "ETH",
-//     toToken: "ADA",
-//     fromAmount: "2.0",
-//     toAmount: "16266.66",
-//     fromChain: "Ethereum",
-//     toChain: "Cardano",
-//     status: "completed",
-//     timestamp: "1 hour ago",
-//     txHash: "0x9876...5432",
-//   },
-//   {
-//     id: "4",
-//     fromToken: "ETH",
-//     toToken: "ADA",
-//     fromAmount: "0.25",
-//     toAmount: "2033.33",
-//     fromChain: "Ethereum",
-//     toChain: "Cardano",
-//     status: "failed",
-//     timestamp: "3 hours ago",
-//     txHash: "0xdef0...1234",
-//   },
-// ]
 
 interface OrdersDashboardProps {
   isEvmWalletConnected: boolean
@@ -127,7 +76,7 @@ export function OrdersDashboard({
   const { address: evmAddress } = useEthereumWallet();
   const [orders, setOrders] = useState<Order[]>([]);
   const [makerOrders, setMakerOrders] = useState<Order[]>([]);
-
+console.log(orders);
   useEffect(() => {
     // Fetch orders from the backend
     const fetchOrders = async () => {

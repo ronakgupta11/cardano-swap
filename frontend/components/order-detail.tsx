@@ -145,6 +145,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       try {
         const response = await fetch(`http://localhost:3000/api/orders/${orderId}`);
         const data = await response.json();
+        if (!data.steps) {
+          data.steps = generateOrderSteps(data);
+        }
+  
         setOrder(data);
       } catch (error) {
         console.error('Failed to fetch order details:', error);
@@ -161,30 +165,43 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   const steps = generateOrderSteps(order);
   const isMaker = order.makerSrcAddress === evmAddress || order.makerDstAddress === cardanoAddress;
 
-  const handleStepAction = (action: string) => {
-    console.log("handleStepAction", action);
-    // Update the step status to completed
-    const updatedSteps = steps.map((step) => {
+const handleStepAction = (action: string) => {
+  // Update the step status to completed
+  setOrder((prevOrder) => {
+    if (!prevOrder) return null;
+
+    if(action === "deploySrcEscrow"){
+      handleDeploySrcEscrow();
+    }
+    else if(action === "deployDstEscrow"){
+      handleDeployDstEscrow();
+    }
+    else if(action === "shareSecret"){}
+    else if(action === "completeOrder"){}
+
+    const updatedSteps = prevOrder.steps?.map((step) => {
       if (step.action === action) {
         return { ...step, status: "completed" };
       }
       return step;
     });
-    setOrder((prevOrder) => ({ ...prevOrder, steps: updatedSteps }) as Order);
-  };
+
+    return { ...prevOrder, steps: updatedSteps };
+  });
+};
 
 
   const handleDeploySrcEscrow = async () => {
 
     if (order.fromChain === "EVM") {
       const immutables = {
-        orderHash: order.orderHash,
+        orderHash: `${order.orderHash}`,
         hashlock: order.hashlock,
         maker: order.makerSrcAddress,
         taker: evmAddress, // Resolver becomes the taker
         token: order.fromToken,
-        amount: order.fromAmount,
-        safetyDeposit: 0.01,
+        amount: parseEther(order.fromAmount.toString()),
+        safetyDeposit: parseEther("0.01"),
         timelocks: "0x0000000000000000000000000000000000000000000000000000000000000000"
       };
       const srcEscrowAddress = await readContract(config,{
@@ -209,9 +226,9 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         abi: LimitOrderProtocol.abi,
         address: ADDRESSES.limitOrderProtocol as `0x${string}`,
         functionName: 'postInteraction',
-        args: [order.orderHash,
+        args: [`${order.orderHash}`,
           ADDRESSES.cardanoEscrowFactory,
-          "0.01"],
+          parseEther("0.01")],
       });
       console.log(`📋 Transaction hash: ${postInteractionTx}`);
 
@@ -276,7 +293,6 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
                     })()
                 }
             },
-            // Input 2: Spend from resolver's wallet for safety deposit
             { 
                 utxo: UTxOUtils.convertUtxo(selectedResolverUtxo)
             }
@@ -289,7 +305,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
                 value: Value.lovelaces(totalEscrowValue),
                 datum: (() => {
                     const datum = EscrowDatum.EscrowDatum({
-                        hashlock: pBSToData.$(pByteString(order.hashlock)),
+                        hashlock: pBSToData.$(pByteString(order.hashlock.replace("0x", ""))),
                         maker_pkh: pBSToData.$(pByteString(makerPkh)),
                         resolver_pkh: pBSToData.$(pByteString(resolverPkh)),
                         resolver_unlock_deadline: pIntToData.$(resolverDeadline),
@@ -308,7 +324,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       console.log('Transaction built:', tx);
   
       // Sign transaction
-      const signedTx = await cardanoWallet?.signTx(tx.toCbor().toString());
+      const signedTx = await cardanoWallet?.signTx(tx.toCbor().toString(),true);
       console.log('Transaction signed:', signedTx);
   
       // Submit transaction
@@ -332,15 +348,16 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
 
   const handleDeployDstEscrow = async () => {
+    console.log("handleDeployDstEscrow",order);
     if (order.toChain === "EVM") {
       const immutables = {
-        orderHash: order.orderHash,
+        orderHash: `0x${order.orderHash}`,
         hashlock: order.hashlock,
         maker: order.makerDstAddress,
         taker: evmAddress, // Resolver becomes the taker
         token: order.toToken,
-        amount: order.toAmount,
-        safetyDeposit: 0.01,
+        amount: parseEther(order.toAmount.toString()),
+        safetyDeposit: parseEther("0.01"),
         timelocks: "0x0000000000000000000000000000000000000000000000000000000000000000"
       };
 
@@ -348,7 +365,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       const dstEscrowCreationTx = await writeContract(config,{
         abi: EscrowFactory.abi,
         address: ADDRESSES.cardanoEscrowFactory as `0x${string}`,
-        functionName: 'createEscrowDst',
+        functionName: 'createDstEscrow',
         args: [immutables],
         value: parseEther((Number(order.toAmount) + 0.01).toString()),
       });
@@ -402,7 +419,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
                 value: Value.lovelaces(BigInt(Number(order.toAmount)*1000000 + 10_000_000)),
                 datum: (() => {
                     const datum = EscrowDatum.EscrowDatum({
-                        hashlock: pBSToData.$(pByteString(order.hashlock)),
+                        hashlock: pBSToData.$(pByteString(order.hashlock.replace("0x", ""))),
                         maker_pkh: pBSToData.$(pByteString(makerPkh)),
                         resolver_pkh: pBSToData.$(pByteString(resolverPkh)),
                         resolver_unlock_deadline: pIntToData.$(resolverDeadline),
@@ -439,7 +456,6 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       
     }
   }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -560,49 +576,51 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       </Card>
 
       {/* Progress Steps */}
+
+
       <Card className="bg-slate-800/50 border-slate-700">
-        <CardContent className="p-4">
-          <h3 className="text-white font-medium mb-4">Progress</h3>
-          <div className="space-y-4">
-            {steps.map((step, index) => (
-              <div key={step.step} className="flex items-start gap-3">
-                <div className="flex flex-col items-center">
+      <CardContent className="p-4">
+        <h3 className="text-white font-medium mb-4">Progress</h3>
+        <div className="space-y-4">
+          {order.steps.map((step, index) => (
+            <div key={step.step} className="flex items-start gap-3">
+              <div className="flex flex-col items-center">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                    step.status === "completed"
+                      ? "bg-green-500 text-white"
+                      : step.status === "pending"
+                      ? "bg-yellow-500 text-white"
+                      : "bg-slate-600 text-slate-300"
+                  }`}
+                >
+             {step.status === "completed" ? "✓" : step.step}
+                </div>
+                {index < order.steps.length - 1 && (
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                      step.status === "completed"
-                        ? "bg-green-500 text-white"
-                        : step.status === "pending"
-                          ? "bg-yellow-500 text-white"
-                          : "bg-slate-600 text-slate-300"
-                    }`}
-                  >
-                    {step.status === "completed" ? "✓" : step.step}
-                  </div>
-                  {index < steps.length - 1 && (
-                    <div
-                      className={`w-0.5 h-8 mt-2 ${step.status === "completed" ? "bg-green-500" : "bg-slate-600"}`}
-                    />
-                  )}
-                </div>
-                <div className="flex-1 pt-1">
-                  <div className="text-white text-sm">{step.description}</div>
-                  {step.timestamp && <div className="text-slate-400 text-xs mt-1">{step.timestamp}</div>}
-                  {!isMaker && step.status !== "completed" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="mt-2 text-xs border-slate-600 text-slate-300 bg-transparent hover:bg-slate-700"
-                      onClick={() => handleStepAction(step.action)}
-                    >
-                      Complete Step
-                    </Button>
-                  )}
-                </div>
+                    className={`w-0.5 h-8 mt-2 ${step.status === "completed" ? "bg-green-500" : "bg-slate-600"}`}
+                  />
+                )}
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <div className="flex-1 pt-1">
+                <div className="text-white text-sm">{step.description}</div>
+                {step.timestamp && <div className="text-slate-400 text-xs mt-1">{step.timestamp}</div>}
+                {!isMaker && step.status !== "completed" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 text-xs border-slate-600 text-slate-300 bg-transparent hover:bg-slate-700"
+                    onClick={() => handleStepAction(step.action)}
+                  >
+                    Complete Step
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
 
       {/* Action Button */}
       {order.status === "available" && (

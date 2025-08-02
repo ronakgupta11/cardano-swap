@@ -421,8 +421,8 @@ export function SwapInterface({
         },
         body: JSON.stringify(newOrderData),
       });
-      const data = await response.json();
-      console.log('API response:', data);
+      // const data = await response.json();
+      // console.log('API response:', data);
 
       // Show success toast
       toast({
