@@ -3,6 +3,7 @@ import express from 'express';
 import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import dotenv from 'dotenv';
+import cors from 'cors';
 
 // Import routers
 import ordersRouter from './routes/orders.js';
@@ -35,7 +36,9 @@ if (!process.env.ETHEREUM_PRIVATE_KEY || !process.env.SEPOLIA_RPC_URL) {
 // Create an Express application
 const app = express();
 app.use(express.json());
-
+app.use(cors({
+  origin: 'http://localhost:3001', // Allow requests from this origin
+}));
 // --- Database Connection ---
 // Test the database connection and sync models
 const initializeDatabase = async () => {

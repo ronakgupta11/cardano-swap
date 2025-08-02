@@ -358,7 +358,6 @@ export function SwapInterface({
       let signature;
       let orderHash;
 
-      // Prepare order data
       const orderData = {
         fromChain: swapDirection === "evm-to-cardano" ? "EVM" : "Cardano",
         toChain: swapDirection === "evm-to-cardano" ? "Cardano" : "EVM",
@@ -370,7 +369,7 @@ export function SwapInterface({
         makerDstAddress: swapDirection === "evm-to-cardano" ? cardanoAddress : evmAddress,
         hashlock,
         salt,
-        expiresAt
+        expiresAt,
       };
       console.log('Prepared order data:', orderData);
 
@@ -409,9 +408,14 @@ export function SwapInterface({
 
       // Call API to save in database
       console.log('Submitting order to API...');
-      const response = await fetch('http://localhost:3001/api/orders', {
+      const newOrderData = {
+        ...orderData,
+        signature,
+        orderHash
+      }
+      const response = await fetch('http://localhost:3000/api/orders', {
         method: 'POST',
-        body: JSON.stringify(orderData),
+        body: JSON.stringify(newOrderData),
       });
       const data = await response.json();
       console.log('API response:', data);
