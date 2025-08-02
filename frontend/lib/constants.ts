@@ -4,14 +4,6 @@
 
 // Order status constants
 
-// import dotenv from 'dotenv';
-// dotenv.config();
-
-//  const ETHEREUM_PRIVATE_KEY = process.env.ETHEREUM_PRIVATE_KEY;
-// const RESOLVER_PK = process.env.RESOLVER_PK;
-// const SEPOLIA_RPC_URL = process.env.SEPOLIA_RPC_URL;
-// const ETHERSCAN_API_KEY = process.env.ETHERSCAN_API_KEY;
-
 const ADDRESSES = {
   "network": "sepolia",
   "chainId": 11155111,
@@ -76,10 +68,7 @@ const HTTP_STATUS = {
 };
 
 export {
-    // ETHEREUM_PRIVATE_KEY,
-    // RESOLVER_PK,
-    // SEPOLIA_RPC_URL,
-    // ETHERSCAN_API_KEY,
+
     ADDRESSES,
   ORDER_STATUSES,
   VALID_ORDER_STATUSES,
