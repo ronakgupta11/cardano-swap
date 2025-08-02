@@ -27,11 +27,6 @@ if (!process.env.PORT) {
 }
 
 
-// Initialize dotenv for environment variables
-if (!process.env.ETHEREUM_PRIVATE_KEY || !process.env.SEPOLIA_RPC_URL) {
-  throw new Error('Required environment variables are missing');
-}
-
 
 // Create an Express application
 const app = express();
