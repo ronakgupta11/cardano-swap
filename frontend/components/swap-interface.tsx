@@ -421,8 +421,12 @@ export function SwapInterface({
         },
         body: JSON.stringify(newOrderData),
       });
-      // const data = await response.json();
-      // console.log('API response:', data);
+      console.log('Response:', response);
+      const data = await response.json();
+      const orderId = data.data.id; 
+      console.log('API response:', data);
+      storeSecretInLocalStorage(orderId, secret);
+      console.log('Secret stored in local storage:', secret);
 
       // Show success toast
       toast({

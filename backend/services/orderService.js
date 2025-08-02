@@ -57,7 +57,7 @@ class OrderService {
       });
 
     //   Logger.info('Order created successfully', { orderId: newOrder.id });
-      return { success: true,  newOrder };
+      return { success: true,  data: newOrder };
 
     } catch (error) {
     //   Logger.error('Order creation failed', { error: error.message, stack: error.stack });
@@ -210,6 +210,26 @@ class OrderService {
     await order.update(updates);
     return { success: true, data: order };
   }
+
+  async updateOrderEscrowAddresses(orderId, escrowAddresses) {
+    const { escrowSrcAddress, escrowDstAddress } = escrowAddresses;
+    const order = await Order.findByPk(orderId);
+    if (!order) {
+      throw new Error(ERROR_MESSAGES.ORDER_NOT_FOUND);
+    }
+
+    const updateData = {};
+    if (escrowSrcAddress) {
+      updateData.escrowSrcAddress = escrowSrcAddress;
+    }
+    if (escrowDstAddress) {
+      updateData.escrowDstAddress = escrowDstAddress;
+    }
+  
+    await order.update(updateData);
+    return { success: true, data: order };
+  }
+
 
   /**
    * Updates the status of an order

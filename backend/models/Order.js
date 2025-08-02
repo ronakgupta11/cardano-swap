@@ -70,13 +70,13 @@ const Order = sequelize.define('Order', {
   // Participant Addresses
   makerSrcAddress: {
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: true,
     field: 'makerSrcAddress',
     comment: 'The address of the user creating the order.'
   },
   makerDstAddress: {
     type: DataTypes.STRING,
-    allowNull: false,
+    allowNull: true,
     field: 'makerDstAddress',
     comment: 'The final address to receive the toToken.'
   },
@@ -114,6 +114,20 @@ const Order = sequelize.define('Order', {
     allowNull: false,
     field: 'signature',
     comment: "The Maker's EIP-712 signature of the order data."
+  },
+
+  //escrow addresses
+  escrowSrcAddress: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'escrowSrcAddress',
+    comment: 'The address of the escrow on the source chain.'
+  },
+  escrowDstAddress: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'escrowDstAddress',
+    comment: 'The address of the escrow on the destination chain.'
   },
 
   // Transaction Tracking

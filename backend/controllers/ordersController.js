@@ -7,7 +7,7 @@ import { handleServiceError } from '../utils/errorHandler.js';
 const createOrder = async (req, res) => {
   try {
     const result = await orderService.createOrder(req.body);
-    res.status(201).json(result.data);
+    res.status(201).json({ data: result.data});
   } catch (error) {
     handleServiceError(error, res);
   }
@@ -64,6 +64,15 @@ const updateOrderTxHashes = async (req, res) => {
   }
 };
 
+const updateOrderEscrowAddresses = async (req, res) => {  
+  try {
+    const result = await orderService.updateOrderEscrowAddresses(req.params.id, req.body);
+    res.json(result.data);
+  } catch (error) {
+    handleServiceError(error, res);
+  }
+};
+
 /**
  * @description Updates the status of an order.
  * Used to move the order through its lifecycle (e.g., to 'withdrawing', 'completed', 'failed').
@@ -84,5 +93,6 @@ export {
   getOrderById,
   acceptOrder,
   updateOrderTxHashes,
-  updateOrderStatus
+  updateOrderStatus,
+  updateOrderEscrowAddresses
 };

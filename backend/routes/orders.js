@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { getAllOrders, getOrderById, createOrder, updateOrderStatus } from '../controllers/ordersController.js';
+import { getAllOrders, getOrderById, createOrder, updateOrderStatus,updateOrderEscrowAddresses,updateOrderTxHashes } from '../controllers/ordersController.js';
 
 const router = express.Router();
 
@@ -105,6 +105,23 @@ const router = express.Router();
  *                   type: integer
  */
 router.get('/', getAllOrders);
+
+/**
+ * @swagger
+ * /api/orders/{id}/escrow-addresses:
+ *   patch:
+ *     summary: Update order escrow addresses
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The order ID
+ */
+router.patch('/:id/escrow-addresses', updateOrderEscrowAddresses);
+router.patch('/:id/tx-hash', updateOrderTxHashes);
 
 /**
  * @swagger

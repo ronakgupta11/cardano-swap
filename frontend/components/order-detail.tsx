@@ -23,7 +23,7 @@ import authVaultData from "@/testnet/auth-vault.plutus.json"
 import { toPlutsUtxo } from "@/lib/meshUtils"
 import UTxOUtils from "@/lib/utxo"
 import { Value } from "@harmoniclabs/plu-ts"
-import { pBSToData, pIntToData, pByteString } from "@harmoniclabs/plu-ts"
+import { pBSToData, pIntToData, pByteString, isData } from "@harmoniclabs/plu-ts"
 
  const EscrowDatum = pstruct({
   EscrowDatum: {
@@ -73,6 +73,10 @@ interface Order {
   exchangeRate: string;
   fromAddress: string;
   toAddress: string;
+  srcWithdrawTxHash: string | null;
+  dstWithdrawTxHash: string | null;
+  escrowSrcAddress: string | null;
+  escrowDstAddress: string | null;
   makerSrcAddress: string;
   makerDstAddress: string;  
   steps: Array<{ step: number; description: string; status: string; timestamp: string,action:string }>;
@@ -125,11 +129,11 @@ const copyToClipboard = (text: string) => {
 const generateOrderSteps = (order: Order) => {
   const steps = [
     { step: 1, description: "Order Created", status: "completed", timestamp: order.createdAt ,action: ""},
-    { step: 2, description: "Source Escrow Deployed", status: "pending", timestamp: "",action: "deploySrcEscrow" },
-    { step: 3, description: "Destination Escrow Deployed", status: "pending", timestamp: "",action: "deployDstEscrow" },
+    { step: 2, description: "Source Escrow Deployed", status: order.escrowSrcAddress ? "completed" : "pending", timestamp: "",action: "deploySrcEscrow" },
+    { step: 3, description: "Destination Escrow Deployed", status: order.escrowDstAddress ? "completed" : "pending", timestamp: "",action: "deployDstEscrow" },
     { step: 4, description: "Secret Shared", status: "pending", timestamp: "", action: "shareSecret" },
-    { step: 5, description: "Withdraw for Maker", status: "pending", timestamp: "", action: "withdrawMaker" },
-    { step: 6, description: "Withdraw for Resolver", status: "pending", timestamp: "", action: "withdrawResolver" },
+    { step: 5, description: "Withdraw for Maker", status: order.dstWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawMaker" },
+    { step: 6, description: "Withdraw for Resolver", status: order.srcWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawResolver" },
     { step: 7, description: "Order Completed", status: "pending", timestamp: "", action: "completeOrder" }
   ];
 
@@ -147,6 +151,8 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   const [order, setOrder] = useState<Order | null>(null);
   const { address: cardanoAddress ,wallet: cardanoWallet} = useCardanoWallet();
   const { address: evmAddress } = useEthereumWallet();
+  const [isProcessing, setIsProcessing] = useState(false);
+
 
   useEffect(() => {
     // Fetch order details based on orderId
@@ -173,7 +179,6 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
   const isMaker = order.makerSrcAddress === evmAddress || order.makerDstAddress === cardanoAddress;
 
-  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleStepAction = async (action: string) => {
     if (isProcessing) return; // Prevent multiple executions
@@ -192,8 +197,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         } else if (action === "shareSecret") {
           // Handle share secret logic
         } else if (action === "withdrawMaker") {
+          handleWithdrawMaker();
           // Handle withdraw maker logic
         } else if (action === "withdrawResolver") {
+          handleWithdrawResolver();
           // Handle withdraw resolver logic
         } else if (action === "completeOrder") {
           // Handle complete order logic
@@ -215,19 +222,24 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   const handleWithdrawMaker = async () => {
       //withdraw will be done on cardano side
     if(order.fromChain === "EVM"){
-      const secret = "" //order.secret;
-      const secretBytes = Buffer.from(secret, 'utf8');
+      const secret = "7c96dc44491cf94d1f726f0550a1a0386b695a16d227013766844d9224287b28" //order.secret;
+      const secretBytes =  Buffer.from(secret, 'hex')
+  
+      console.log('Secret Bytes:', secretBytes);
+      console.log('Secret:', secret);
+      console.log(pBSToData.$(pByteString(secretBytes)));
       const Blockfrost = blockfrost();
       const txBuilder = await getTxBuilder(Blockfrost);
 
       const utxos = await Blockfrost.addressUtxos(scriptAddr.toString());
       const utxo = utxos.find(utxo => utxo.utxoRef.id.toString() === order.escrowDstAddress);
 
-      const escrowDatum = utxo?.resolved.datum as DataConstr;
+      const escrowDatum = utxo?.resolved.datum as any;
+      console.log('Escrow Datum:', escrowDatum);
 
       const fields = escrowDatum.fields;
-
-      const safetyDeposit =  Number(fields[6])
+      console.log('Fields:', fields);
+      const safetyDeposit = BigInt(fields[6].int);
 
       console.log('Safety Deposit:', safetyDeposit);
 
@@ -287,15 +299,25 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       // Submit transaction
       const txHash = await cardanoWallet?.submitTx(signedTx as any);
       console.log('Transaction submitted. Hash:', txHash);
+
+      const response = await fetch(`http://localhost:3000/api/orders/${order.id}/tx-hash`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dstWithdrawTxHash: txHash }),
+      });
+      const data = await response.json();
+      console.log(data);
     }
     else{
       //withdraw will be done on evm side
 
-      const secret = "" //order.secret;
+      const secret = "7c96dc44491cf94d1f726f0550a1a0386b695a16d227013766844d9224287b28" //order.secret;
 
       const immutables = {
         orderHash: `0x${order.orderHash}`,
-        hashlock: `0x${order.hashlock}`,
+        hashlock: `${order.hashlock}`,
         maker: order.makerDstAddress,
         taker: evmAddress,
         token: order.toToken,
@@ -308,7 +330,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         abi: EscrowDst.abi,
         address: order.escrowDstAddress as `0x${string}`,
         functionName: 'withdraw',
-        args: [secret,immutables],
+        args: [`0x${secret}`,immutables],
       });
       console.log(`📋 Transaction hash: ${withdrawTx}`);
 
@@ -316,21 +338,37 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         hash: withdrawTx,
       });
       console.log(`✅ Withdraw completed in block ${receipt.blockNumber}`);
+
+      const response = await fetch(`http://localhost:3000/api/orders/${order.id}/tx-hash`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dstWithdrawTxHash: withdrawTx }),
+      });
+      const data = await response.json();
+      console.log(data);
     }
+
+    
   }
 
   const handleWithdrawResolver = async () => {
     //withdraw will be done Cardano side
 
   if(order.fromChain === "Cardano"){
-    const secret = "" //order.secret;
-    const secretBytes = Buffer.from(secret, 'utf8');
+    const secret = "7c96dc44491cf94d1f726f0550a1a0386b695a16d227013766844d9224287b28" //order.secret;
+    const secretBytes =  Buffer.from(secret, 'hex')
+
+    console.log('Secret Bytes:', secretBytes);
+    console.log('Secret:', secret);
+    console.log(pBSToData.$(pByteString(secretBytes)));
     const Blockfrost = blockfrost();
     const txBuilder = await getTxBuilder(Blockfrost);
 
     const utxos = await Blockfrost.addressUtxos(scriptAddr.toString());
     const utxo = utxos.find(utxo => utxo.utxoRef.id.toString() === order.escrowSrcAddress);
-
+    console.log('UTXO:', utxo);
   
 
  
@@ -366,6 +404,9 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
                       secret: pBSToData.$(pByteString(secretBytes))
                   })
               }
+          },
+          {
+            utxo: UTxOUtils.convertUtxo(selectedResolverUtxo) // for fee
           }
       ],
       outputs: [
@@ -391,11 +432,21 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
     // Submit transaction
     const txHash = await cardanoWallet?.submitTx(signedTx as any);
     console.log('Transaction submitted. Hash:', txHash);
+
+    const response = await fetch(`http://localhost:3000/api/orders/${order.id}/tx-hash`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ srcWithdrawTxHash: txHash }),
+    });
+    const data = await response.json();
+    console.log(data);
   }
   else{
     //withdraw will be done on evm side
 
-    const secret = "" //order.secret;
+    const secret = "7c96dc44491cf94d1f726f0550a1a0386b695a16d227013766844d9224287b28" //order.secret;
 
     const immutables = {
       orderHash: order.orderHash,
@@ -412,7 +463,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       abi: EscrowSrc.abi,
       address: order.escrowSrcAddress as `0x${string}`,
       functionName: 'withdraw',
-      args: [secret,immutables],
+      args: [`0x${secret}`,immutables],
     });
     console.log(`📋 Transaction hash: ${withdrawTx}`);
 
@@ -420,7 +471,18 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       hash: withdrawTx,
     });
     console.log(`✅ Withdraw completed in block ${receipt.blockNumber}`);
-  }
+  
+
+  const response = await fetch(`http://localhost:3000/api/orders/${order.id}//tx-hash`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ srcWithdrawTxHash: withdrawTx }),
+  });
+  const data = await response.json();
+  console.log(data);
+}
 }
 
 
@@ -472,7 +534,15 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       });
       console.log(`✅ PostFund completed in block ${receipt2.blockNumber}`);
 
-
+      const response = await fetch(`http://localhost:3000/api/orders/${order.id}/escrow-addresses`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ escrowSrcAddress: srcEscrowAddress }),
+      });
+      const data = await response.json();
+      console.log(data);
     }
     else{
 
@@ -572,7 +642,15 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   
       console.log("Cardano transaction submitted successfully", { txHash });
 
-
+      const response = await fetch(`http://localhost:3000/api/orders/${order.id}/escrow-addresses`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ escrowSrcAddress: txHash }),
+      });
+      const data = await response.json();
+      console.log(data);
 
     }
 
@@ -596,6 +674,12 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         timelocks: "0x0000000000000000000000000000000000000000000000000000000000000000"
       };
 
+      const dstEscrowAddress = await readContract(config,{
+        abi: EscrowFactory.abi,
+        address: ADDRESSES.cardanoEscrowFactory as `0x${string}`,
+        functionName: 'addressOfEscrowDst',
+        args: [immutables],
+      });
 
       const dstEscrowCreationTx = await writeContract(config,{
         abi: EscrowFactory.abi,
@@ -611,6 +695,15 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       })
       console.log(`✅ Escrow created in block ${receipt2.blockNumber}`);
 
+      const response = await fetch(`http://localhost:3000/api/orders/${order.id}/escrow-addresses`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ escrowDstAddress: dstEscrowAddress }),
+      });
+      const data = await response.json();
+      console.log(data);
     }
     else{
       const Blockfrost = blockfrost();
@@ -686,7 +779,15 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   
       console.log("Cardano transaction submitted successfully", { txHash });
 
-
+      const response = await fetch(`http://localhost:3000/api/orders/${order.id}/escrow-addresses`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ escrowDstAddress: txHash }),
+      });
+      const data = await response.json();
+      console.log(data);
 
       
     }
