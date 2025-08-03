@@ -380,6 +380,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       });
       const data = await response.json();
       console.log(data);
+      setOrder((prevOrder) => {
+        if (!prevOrder) return null;
+        return { ...prevOrder,dstWithdrawTxHash: txHash as any };
+      });
     }
     else{
       //withdraw will be done on evm side
@@ -419,6 +423,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       });
       const data = await response.json();
       console.log(data);
+      setOrder((prevOrder) => {
+        if (!prevOrder) return null;
+        return { ...prevOrder,dstWithdrawTxHash: withdrawTx as any };
+      });
     }
 
     
@@ -513,6 +521,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
     });
     const data = await response.json();
     console.log(data);
+    setOrder((prevOrder) => {
+      if (!prevOrder) return null;
+      return { ...prevOrder,srcWithdrawTxHash: txHash as any };
+    });
   }
   else{
     //withdraw will be done on evm side
@@ -553,6 +565,11 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   });
   const data = await response.json();
   console.log(data);
+
+  setOrder((prevOrder) => {
+    if (!prevOrder) return null;
+    return { ...prevOrder,srcWithdrawTxHash: withdrawTx as any };
+  });
 }
 }
 
@@ -625,6 +642,11 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       });
       const data2 = await response2.json();
       console.log(data2);
+
+      setOrder((prevOrder) => {
+        if (!prevOrder) return null;
+        return { ...prevOrder,srcEscrowTxHash: postInteractionTx as any };
+      });
     }
     else{
 
@@ -744,6 +766,11 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       const data2 = await response2.json();
       console.log(data2);
 
+      setOrder((prevOrder) => {
+        if (!prevOrder) return null;
+        return { ...prevOrder,srcEscrowTxHash: txHash as any };
+      });
+
     }
 
     // const response = await fetch(`http://localhost:3000/api/orders/${orderId}/deploy-src-escrow`);
@@ -806,6 +833,11 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       });
       const data2 = await response2.json();
       console.log(data2);
+
+      setOrder((prevOrder) => {
+        if (!prevOrder) return null;
+        return { ...prevOrder,dstEscrowTxHash: dstEscrowCreationTx as any };
+      });
     }
     else{
       const Blockfrost = blockfrost();
@@ -901,7 +933,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       const data2 = await response2.json();
       console.log(data2);
 
-      
+      setOrder((prevOrder) => {
+        if (!prevOrder) return null;
+        return { ...prevOrder,dstEscrowTxHash: txHash as any };
+      }); 
     }
   }
   return (

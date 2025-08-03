@@ -25,11 +25,37 @@ class MonitorService {
         while (this.isRunning) {
             try {
                 await this.checkPendingOrders();
+                await this.checkCompletedOrders();
                 await new Promise(resolve => setTimeout(resolve, this.pollingInterval));
             } catch (error) {
                 console.error('❌ Error in monitor service polling:', error);
                 // Continue polling even if there's an error
             }
+        }
+    }
+
+    async checkCompletedOrders() {
+        console.log('🔍 Checking for completed orders...');
+        const completedOrders = await Order.findAll({
+            where: {
+                status: 'withdrawing',
+                srcWithdrawTxHash: { [Op.not]: null },
+                dstWithdrawTxHash: { [Op.not]: null }
+            }
+        });
+
+        for (const order of completedOrders) {
+            console.log(`🎯 Order ${order.id} is completed`);
+            console.log('Order details:', {
+                id: order.id,
+                srcTxHash: order.srcWithdrawTxHash,
+                dstTxHash: order.dstWithdrawTxHash
+            });
+            // Update order status to completed
+            await order.update({
+                status: 'completed'
+            });
+            console.log(`✅ Updated order ${order.id} to completed`);   
         }
     }
 
