@@ -163,7 +163,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   const { address: cardanoAddress ,wallet: cardanoWallet} = useCardanoWallet();
   const { address: evmAddress } = useEthereumWallet();
   const [isProcessing, setIsProcessing] = useState(false);
-  const isMaker = order?.makerSrcAddress === evmAddress || order?.makerDstAddress === cardanoAddress;
+  const isMaker =   order?.makerSrcAddress === evmAddress || order?.makerSrcAddress === cardanoAddress || order?.makerDstAddress === evmAddress || order?.makerDstAddress === cardanoAddress
   // Only pass orderId to WebSocket hook after accepting order
   const [isAccepted, setIsAccepted] = useState(false);
   const { connect, getSecret } = useWebSocket(isAccepted ? orderId : '', isMaker ? 'maker' : 'resolver');
@@ -171,6 +171,11 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
   // Effect to watch for secret updates
   useEffect(() => {
+    // Stop if we already have a secret or if user is a maker
+    if (isMaker || order?.secret) {
+      return;
+    }
+
     const checkForSecret = () => {
       if (!isMaker) { // Only resolvers should watch for secrets
         const secret = getSecret();
@@ -194,10 +199,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
     // Check immediately and set up interval
     checkForSecret();
-    const interval = setInterval(checkForSecret, 1000);
+    const interval = setInterval(checkForSecret, 3000);
 
     return () => clearInterval(interval);
-  }, [getSecret, isMaker]);
+  }, [getSecret, isMaker, order?.secret]);
 
   useEffect(() => {
     // Fetch order details based on orderId
@@ -221,6 +226,16 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
     fetchOrderDetail();
   }, [orderId]);
+
+  // useEffect(() => {
+  //   console.log('Order:', order);
+  //   if(order){
+  //     setOrder((prevOrder) => {
+  //       if (!prevOrder) return null;
+  //       return { ...prevOrder, steps: generateOrderSteps(prevOrder) };
+  //     });
+  //   }
+  // }, [order]);
 
   if (!order) {
     return <div>Loading...</div>;
@@ -266,10 +281,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
           // Handle share secret logic
         } else if (action === "withdrawMaker") {
-          await handleWithdrawMaker();
+          await handleWithdrawMaker(order);
           // Handle withdraw maker logic
         } else if (action === "withdrawResolver") {
-          await handleWithdrawResolver();
+          await handleWithdrawResolver(order);
           // Handle withdraw resolver logic
         } else if (action === "completeOrder") {
 
