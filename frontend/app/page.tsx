@@ -6,13 +6,13 @@ import { OrdersDashboard } from "@/components/orders-dashboard"
 import { OrderDetail } from "@/components/order-detail"
 import { Button } from "@/components/ui/button"
 import { ArrowLeftRight, List, Zap } from "lucide-react"
-import { useWallet } from "@meshsdk/react"
 import { useEthereumWallet } from "@/hooks/use-ethereum-wallet"
+import { useCardanoWallet } from "@/context/WalletContext"
 
 export default function Home() {
   const [currentView, setCurrentView] = useState<"swap" | "orders" | "order-detail">("swap")
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null)
-  const { connected } = useWallet()
+const {isConnected: isCardanoWalletConnected,connect: connectCardanoWallet} = useCardanoWallet()
   const { isConnected: isEvmWalletConnected, connect: connectEvmWallet } = useEthereumWallet()
 
   const handleViewOrderDetail = (orderId: string) => {
@@ -33,7 +33,7 @@ export default function Home() {
               <h1 className="text-xl font-bold text-white">CardanoSwap</h1>
             </div>
 
-            {(isEvmWalletConnected || connected) && (
+            {(isEvmWalletConnected || isCardanoWalletConnected) && (
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 <span className="text-sm text-slate-300">Connected</span>
