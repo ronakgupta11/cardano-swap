@@ -71,12 +71,11 @@ export function OrdersDashboard({
   onEvmWalletConnect,
   onViewDetail,
 }: OrdersDashboardProps) {
-  const [activeTab, setActiveTab] = useState("all");
+  const [activeTab, setActiveTab] = useState("available");
   const { isConnected, connect, disconnect, address: cardanoAddress } = useCardanoWallet();
   const { address: evmAddress } = useEthereumWallet();
   const [orders, setOrders] = useState<Order[]>([]);
   const [makerOrders, setMakerOrders] = useState<Order[]>([]);
-console.log(orders);
   useEffect(() => {
     // Fetch orders from the backend
     const fetchOrders = async () => {

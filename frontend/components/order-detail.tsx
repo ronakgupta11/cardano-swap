@@ -185,7 +185,8 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
               }
               return step;
             });
-            return { ...prevOrder, steps: updatedSteps,secret: secret };
+            const updatedOrder = { ...prevOrder, steps: updatedSteps, secret: secret };
+            return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
           });
         }
       }
@@ -239,7 +240,8 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
     console.log(data);
     setOrder((prevOrder) => {
       if (!prevOrder) return null;
-      return { ...prevOrder, status: "accepted",resolverAddress:order.fromChain === "EVM" ? evmAddress : cardanoAddress as any };
+      const updatedOrder = { ...prevOrder, status: "accepted" as const, resolverAddress: order.fromChain === "EVM" ? evmAddress : cardanoAddress as any };
+      return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
     });
 
     // Set accepted state to true which will trigger WebSocket connection
@@ -274,23 +276,24 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
           // Handle complete order logic
         }
 
-        setOrder((prevOrder) => {
-          if (!prevOrder) return null;
-  
-        const updatedSteps = prevOrder.steps?.map((step) => {
-          if (step.action === action) {
-            return { ...step, status: "completed" };
-          }
-          return step;
+        const newOrder = await fetch(`http://localhost:3000/api/orders/${orderId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         });
+        const data = await newOrder.json();
+        if (!data.steps) {
+          data.steps = generateOrderSteps(data);
+        }
   
-        return { ...prevOrder, steps: updatedSteps };
-      });
+        setOrder(data);
+        
     } finally {
       setIsProcessing(false);
     }
   };
-  const handleWithdrawMaker = async () => {
+  const handleWithdrawMaker = async (order: Order) => {
       //withdraw will be done on cardano side
     if(order.fromChain === "EVM"){
       const secret = order.secret as string;
@@ -382,13 +385,16 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       console.log(data);
       setOrder((prevOrder) => {
         if (!prevOrder) return null;
-        return { ...prevOrder,dstWithdrawTxHash: txHash as any };
+        const updatedOrder = { ...prevOrder, dstWithdrawTxHash: txHash as any };
+        return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
       });
     }
     else{
       //withdraw will be done on evm side
 
       const secret = order.secret as string;
+      console.log('Secret:', secret);
+
 
       const immutables = {
         orderHash: `0x${order.orderHash}`,
@@ -400,6 +406,8 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         safetyDeposit: parseEther("0.01"),
         timelocks: "0x0000000000000000000000000000000000000000000000000000000000000000" // No timelocks for this demo
       };
+      console.log('Immutables:', immutables);
+      console.log('Escrow Address:', order.escrowDstAddress);
 
       const withdrawTx = await writeContract(config,{
         abi: EscrowDst.abi,
@@ -425,19 +433,23 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
       console.log(data);
       setOrder((prevOrder) => {
         if (!prevOrder) return null;
-        return { ...prevOrder,dstWithdrawTxHash: withdrawTx as any };
+        const updatedOrder = { ...prevOrder, dstWithdrawTxHash: withdrawTx as any };
+        return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
       });
     }
 
     
   }
 
-  const handleWithdrawResolver = async () => {
+  const handleWithdrawResolver = async (order: Order) => {
     //withdraw will be done Cardano side
 
   if(order.fromChain === "Cardano"){
     const secret = order.secret as string;
     const secretBytes =  Buffer.from(secret, 'hex')
+    console.log('Secret Bytes:', secretBytes);
+    console.log('Secret:', secret);
+    console.log(pBSToData.$(pByteString(secretBytes)));
 
     console.log('Secret Bytes:', secretBytes);
     console.log('Secret:', secret);
@@ -521,15 +533,17 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
     });
     const data = await response.json();
     console.log(data);
-    setOrder((prevOrder) => {
-      if (!prevOrder) return null;
-      return { ...prevOrder,srcWithdrawTxHash: txHash as any };
-    });
+          setOrder((prevOrder) => {
+        if (!prevOrder) return null;
+        const updatedOrder = { ...prevOrder, srcWithdrawTxHash: txHash as any };
+        return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
+      });
   }
   else{
     //withdraw will be done on evm side
 
     const secret = order.secret as string;
+    console.log('Secret:', secret);
 
     const immutables = {
       orderHash: order.orderHash,
@@ -566,10 +580,11 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   const data = await response.json();
   console.log(data);
 
-  setOrder((prevOrder) => {
-    if (!prevOrder) return null;
-    return { ...prevOrder,srcWithdrawTxHash: withdrawTx as any };
-  });
+        setOrder((prevOrder) => {
+        if (!prevOrder) return null;
+        const updatedOrder = { ...prevOrder, srcWithdrawTxHash: withdrawTx as any };
+        return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
+      });
 }
 }
 
@@ -645,7 +660,8 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
       setOrder((prevOrder) => {
         if (!prevOrder) return null;
-        return { ...prevOrder,srcEscrowTxHash: postInteractionTx as any };
+        const updatedOrder = { ...prevOrder, srcEscrowTxHash: postInteractionTx as any };
+        return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
       });
     }
     else{
@@ -768,7 +784,8 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
       setOrder((prevOrder) => {
         if (!prevOrder) return null;
-        return { ...prevOrder,srcEscrowTxHash: txHash as any };
+        const updatedOrder = { ...prevOrder, srcEscrowTxHash: txHash as any };
+        return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
       });
 
     }
@@ -836,7 +853,8 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
       setOrder((prevOrder) => {
         if (!prevOrder) return null;
-        return { ...prevOrder,dstEscrowTxHash: dstEscrowCreationTx as any };
+        const updatedOrder = { ...prevOrder, dstEscrowTxHash: dstEscrowCreationTx as any };
+        return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
       });
     }
     else{
@@ -935,7 +953,8 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
 
       setOrder((prevOrder) => {
         if (!prevOrder) return null;
-        return { ...prevOrder,dstEscrowTxHash: txHash as any };
+        const updatedOrder = { ...prevOrder, dstEscrowTxHash: txHash as any };
+        return { ...updatedOrder, steps: generateOrderSteps(updatedOrder) };
       }); 
     }
   }

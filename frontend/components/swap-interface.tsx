@@ -532,7 +532,7 @@ export function SwapInterface({
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">{cardanoToken.icon}</span>
                   <div className="text-left">
-                    <div className="font-semibold">{cardanoToken.symbol}</div>
+                    <div className="font-semibold text-white">{cardanoToken.symbol}</div>
                     <div className="text-xs text-slate-400">on {cardanoToken.chain}</div>
                   </div>
                 </div>
@@ -587,7 +587,7 @@ export function SwapInterface({
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">{cardanoToken.icon}</span>
                   <div className="text-left">
-                    <div className="font-semibold">{cardanoToken.symbol}</div>
+                    <div className="font-semibold text-white">{cardanoToken.symbol}</div>
                     <div className="text-xs text-slate-400">on {cardanoToken.chain}</div>
                   </div>
                 </div>

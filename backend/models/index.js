@@ -5,7 +5,7 @@ import { sequelize } from '../config/database.js';
 
 const syncDatabase = async () => {
   try {
-    await sequelize.sync({ force: true });
+    await sequelize.sync({ alter: true });
     console.log('Database tables synchronized successfully.');
   } catch (error) {
     console.error('Error synchronizing database tables:', error);
