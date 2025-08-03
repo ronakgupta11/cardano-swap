@@ -20,14 +20,20 @@ import {
     punsafeConvertType,
     pBool
 } from "@harmoniclabs/plu-ts";
-import { EscrowDatum } from "./Datum";
-import { EscrowRedeemer } from "./Redeemer";
+import { EscrowDatum } from "./MyDatum";
+import { EscrowRedeemer } from "./MyRedeemer";
 
 /**
  * Atomic Swap Escrow Contract
  * 
  * This contract implements a hash-time-locked contract (HTLC) for atomic swaps.
  * It allows for secure, trustless exchange of assets between parties.
+ * 
+ * Features:
+ * - Secret-based withdrawal with timelock
+ * - Resolver-exclusive period before deadline
+ * - Public withdrawal after deadline
+ * - Cancel functionality for resolver
  */
 export const escrow = pfn([
     PScriptContext.type

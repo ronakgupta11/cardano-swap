@@ -1,0 +1,10 @@
+{
+  "makerAsset": "0x0000000000000000000000000000000000000000",
+  "makingAmount": "1000000000000000",
+  "adaAmount": "100",
+  "cardanoAddress": "addr1qxy2l9e7cr3a6jj4vkt5w2r87q0q0k7jk0xj2r3c9e6vp7z8s2v6p9h4k3j2l1m0n9o8p7q6r5s4t3u2v1w0x9y8z7a6b5c4d3e2f1",
+  "receiver": "0x0000000000000000000000000000000000000000",
+  "safetyDeposit": "100000000000000",
+  "salt": 660356,
+  "deadline": 1753716176
+}

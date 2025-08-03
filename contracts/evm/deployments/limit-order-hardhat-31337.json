@@ -1,0 +1,16 @@
+{
+  "network": "hardhat",
+  "chainId": 31337,
+  "contracts": {
+    "limitOrderProtocol": "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+  },
+  "config": {
+    "name": "Atomic Swap Limit Order Protocol",
+    "version": "1.0.0"
+  },
+  "deployedAt": "2025-07-28T16:17:22.740Z",
+  "gasUsed": {
+    "limitOrderProtocol": "2186135",
+    "total": "2186135"
+  }
+}

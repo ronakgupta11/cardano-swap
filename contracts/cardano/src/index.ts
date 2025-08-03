@@ -70,7 +70,7 @@ async function main() {
         );
 
         Logger.success("📜 Compiled script saved to ./testnet/atomic-swap.plutus.json");
-        Logger.success("📜 Compiled script saved to ./testnet/lock-in-auth-vault.plutus.json");
+        Logger.success("📜 Compiled script saved to ./testnet/auth-vault.plutus.json");
 
     } catch (error) {
         Logger.error("❌ Failed to compile or save script", error as Error);
@@ -82,29 +82,6 @@ async function main() {
 if (import.meta.url === `file://${process.argv[1]}`) {
     main();
 }
-
-/**
- * Example usage:
- * 
- * ```typescript
- * import { createSwapEscrow, withdrawFromSwap, cancelSwap } from './src';
- * 
- * // Create a swap
- * await createSwapEscrow({
- *   secret: "my-secret",
- *   escrowAmount: BigInt(10_000_000), // 10 ADA
- *   deadlineOffset: 1 // 1 hour
- * });
- * 
- * // Withdraw from swap
- * await withdrawFromSwap({
- *   secret: "my-secret"
- * });
- * 
- * // Cancel swap
- * await cancelSwap();
- * ```
- */
 
 // Enable debug logging with environment variable
 if (process.env.DEBUG === 'true') {

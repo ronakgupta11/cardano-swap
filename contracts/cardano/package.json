@@ -1,0 +1,52 @@
+{
+  "name": "atomic-swap-cardano",
+  "version": "1.0.0",
+  "description": "Hash-Time-Locked Contract (HTLC) implementation for atomic swaps on Cardano",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p ./tsconfig.json && tsc-alias -p ./tsconfig.json",
+    "start": "npm run build && node dist/index.js",
+    "compile": "npm run start",
+    "dev": "DEBUG=true npm run start",
+    "swap:create": "npm run build && node dist/app/createSwapEscrow.js",
+    "swap:withdraw": "npm run build && node dist/app/withdrawFromSwap.js",
+    "swap:cancel": "npm run build && node dist/app/cancelSwapRefactored.js",
+    "swap:genKeys": "npm run build && node dist/app/genKeys.js",
+    "auth:lock": "npm run build && node dist/app/lockInAuthVault.js",
+    "auth:createEscrow": "npm run build && node dist/app/createEscrowFromAuthVault.js",
+    "test": "echo \"Tests not implemented yet\" && exit 1",
+    "clean": "rm -rf dist",
+    "lint": "echo \"Linting not configured\" && exit 0"
+  },
+  "keywords": [
+    "cardano",
+    "plutus",
+    "smart-contracts",
+    "atomic-swap",
+    "htlc",
+    "blockchain",
+    "typescript",
+    "plu-ts"
+  ],
+  "author": "Harmonic Labs",
+  "license": "MIT",
+  "dependencies": {
+    "@harmoniclabs/blockfrost-pluts": "^0.2.4",
+    "@harmoniclabs/plu-ts": "^0.8.2",
+    "blakejs": "^1.2.1",
+    "dotenv": "^17.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "tsc-alias": "^1.7.1",
+    "typescript": "^4.8.4"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HarmonicLabs/plu-ts-starter"
+  }
+}

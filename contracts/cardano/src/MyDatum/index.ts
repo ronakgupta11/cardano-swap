@@ -17,15 +17,3 @@ export const EscrowDatum = pstruct({
   }
 }); 
 
-
-export const AuthVaultDatum = pstruct({
-    AuthVaultDatum: {
-        maker_pkh: PPubKeyHash.type,
-        expected_escrow_script_hash: bs,
-        maker_input_value: int
-    }
-});
-
-
-
-
