@@ -4,10 +4,15 @@ import swaggerJsdoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import http from 'http';
 
 // Import routers
 import ordersRouter from './routes/orders.js';
 import relayerRouter from './routes/relayer.js';
+
+// Import services
+import { websocketService } from './services/websocketService.js';
+import { monitorService } from './services/monitorService.js';
 
 // Import utility functions
 import { testConnection } from './config/database.js';
@@ -26,21 +31,24 @@ if (!process.env.PORT) {
   process.env.PORT = 3000; // Default port if not set
 }
 
-
-
 // Create an Express application
 const app = express();
+const server = http.createServer(app);
+
 app.use(express.json());
 app.use(cors({
   origin: 'http://localhost:3001', // Allow requests from this origin
 }));
+
+// Initialize WebSocket
+websocketService.initialize(server);
+
 // --- Database Connection ---
 // Test the database connection and sync models
 const initializeDatabase = async () => {
   await testConnection();
   await syncDatabase();
 };
-
 
 // --- Swagger Definition ---
 const swaggerOptions = {
@@ -63,7 +71,6 @@ const swaggerOptions = {
 const swaggerDocs = swaggerJsdoc(swaggerOptions);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-
 // --- API Routes ---
 
 // Mount routers
@@ -75,13 +82,16 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
 
-
 // --- Start the server ---
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
+server.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`API Documentation available at http://localhost:${PORT}/api-docs`);
+  console.log(`WebSocket server is running on ws://localhost:${PORT}`);
   
   // Initialize database
   await initializeDatabase();
+  
+  // Start the monitor service
+  monitorService.start();
 });

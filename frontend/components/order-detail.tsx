@@ -24,6 +24,7 @@ import { toPlutsUtxo } from "@/lib/meshUtils"
 import UTxOUtils from "@/lib/utxo"
 import { Value } from "@harmoniclabs/plu-ts"
 import { pBSToData, pIntToData, pByteString, isData } from "@harmoniclabs/plu-ts"
+import { useWebSocket } from "@/hooks/use-websocket";
 
  const EscrowDatum = pstruct({
   EscrowDatum: {
@@ -64,7 +65,7 @@ interface Order {
   toChain: string;
   hashlock: string;
   orderHash: string;
-  status: "pending" | "completed" | "failed" | "available";
+  status: "pending" | "completed" | "failed" | "available" | "accepted";
   timestamp: string;
   createdAt: string;
   txHash: string;
@@ -79,10 +80,13 @@ interface Order {
   dstEscrowTxHash: string | null;
   escrowSrcAddress: string | null;
   escrowDstAddress: string | null;
+  resolverAddress: string | null;
   makerSrcAddress: string;
   makerDstAddress: string;  
   steps: Array<{ step: number; description: string; status: string; timestamp: string,action:string,href:string }>;
+  secret: string | null;
 }
+
 
 const getStatusIcon = (status: string) => {
   switch (status) {
@@ -94,6 +98,8 @@ const getStatusIcon = (status: string) => {
       return <AlertCircle className="w-4 h-4 text-red-500" />;
     case "available":
       return <ExternalLink className="w-4 h-4 text-blue-500" />;
+    case "accepted":
+      return <CheckCircle className="w-4 h-4 text-green-500" />;
     default:
       return null;
   }
@@ -109,6 +115,8 @@ const getStatusColor = (status: string) => {
       return "bg-red-500/20 text-red-300 border-red-500/30";
     case "available":
       return "bg-blue-500/20 text-blue-300 border-blue-500/30";
+    case "accepted":
+      return "bg-green-500/20 text-green-300 border-green-500/30";
     default:
       return "bg-slate-500/20 text-slate-300 border-slate-500/30";
   }
@@ -131,12 +139,13 @@ const copyToClipboard = (text: string) => {
 const generateOrderSteps = (order: Order) => {
   const steps = [
     { step: 1, description: "Order Created", status: "completed", timestamp: order.createdAt ,action: "",href: ""},
-    { step: 2, description: "Source Escrow Deployed", status: order.escrowSrcAddress ? "completed" : "pending", timestamp: "",action: "deploySrcEscrow",href: order.fromChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.srcEscrowTxHash}` : "https://sepolia.etherscan.io/tx/" + order.srcEscrowTxHash },
-    { step: 3, description: "Destination Escrow Deployed", status: order.escrowDstAddress ? "completed" : "pending", timestamp: "",action: "deployDstEscrow",href: order.toChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.dstEscrowTxHash}` : "https://sepolia.etherscan.io/tx/" + order.dstEscrowTxHash },
-    { step: 4, description: "Secret Shared", status: "pending", timestamp: "", action: "shareSecret",href: "" },
-    { step: 5, description: "Withdraw for Maker", status: order.dstWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawMaker",href: order.toChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.dstWithdrawTxHash}` : "https://sepolia.etherscan.io/tx/" + order.dstWithdrawTxHash },
-    { step: 6, description: "Withdraw for Resolver", status: order.srcWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawResolver",href: order.fromChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.srcWithdrawTxHash}` : "https://sepolia.etherscan.io/tx/" + order.srcWithdrawTxHash },
-    { step: 7, description: "Order Completed", status: "pending", timestamp: "", action: "completeOrder",href: "" }
+    { step: 2, description: "Order Accepted", status: order.resolverAddress  ? "completed" : "pending", timestamp: "",action: "acceptOrder",href: "" },
+    { step: 3, description: "Source Escrow Deployed", status: order.escrowSrcAddress ? "completed" : "pending", timestamp: "",action: "deploySrcEscrow",href: order.fromChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.srcEscrowTxHash}` : "https://sepolia.etherscan.io/tx/" + order.srcEscrowTxHash },
+    { step: 4, description: "Destination Escrow Deployed", status: order.escrowDstAddress ? "completed" : "pending", timestamp: "",action: "deployDstEscrow",href: order.toChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.dstEscrowTxHash}` : "https://sepolia.etherscan.io/tx/" + order.dstEscrowTxHash },
+    { step: 5, description: "Secret Shared", status: order.secret ? "completed" : "pending", timestamp: "", action: "shareSecret",href: "" },
+    { step: 6, description: "Withdraw for Maker", status: order.dstWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawMaker",href: order.toChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.dstWithdrawTxHash}` : "https://sepolia.etherscan.io/tx/" + order.dstWithdrawTxHash },
+    { step: 7, description: "Withdraw for Resolver", status: order.srcWithdrawTxHash ? "completed" : "pending", timestamp: "", action: "withdrawResolver",href: order.fromChain === "Cardano" ? `https://preprod.cardanoscan.io/transaction/${order.srcWithdrawTxHash}` : "https://sepolia.etherscan.io/tx/" + order.srcWithdrawTxHash },
+    { step: 8, description: "Order Completed", status: "pending", timestamp: "", action: "completeOrder",href: "" }
   ];
 
   // Update step statuses based on order status
@@ -154,7 +163,40 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   const { address: cardanoAddress ,wallet: cardanoWallet} = useCardanoWallet();
   const { address: evmAddress } = useEthereumWallet();
   const [isProcessing, setIsProcessing] = useState(false);
+  const isMaker = order?.makerSrcAddress === evmAddress || order?.makerDstAddress === cardanoAddress;
+  // Only pass orderId to WebSocket hook after accepting order
+  const [isAccepted, setIsAccepted] = useState(false);
+  const { connect, getSecret } = useWebSocket(isAccepted ? orderId : '', isMaker ? 'maker' : 'resolver');
 
+
+  // Effect to watch for secret updates
+  useEffect(() => {
+    const checkForSecret = () => {
+      if (!isMaker) { // Only resolvers should watch for secrets
+        const secret = getSecret();
+        if (secret) {
+          console.log('Secret received via WebSocket:', secret);
+          // Update the step status
+          setOrder((prevOrder) => {
+            if (!prevOrder) return null;
+            const updatedSteps = prevOrder.steps?.map((step) => {
+              if (step.action === "shareSecret") {
+                return { ...step, status: "completed" };
+              }
+              return step;
+            });
+            return { ...prevOrder, steps: updatedSteps,secret: secret };
+          });
+        }
+      }
+    };
+
+    // Check immediately and set up interval
+    checkForSecret();
+    const interval = setInterval(checkForSecret, 1000);
+
+    return () => clearInterval(interval);
+  }, [getSecret, isMaker]);
 
   useEffect(() => {
     // Fetch order details based on orderId
@@ -167,6 +209,10 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
         }
   
         setOrder(data);
+        // Initialize isAccepted based on order status
+        if (data.status === "accepted" || data.status === "completed" && data.resolverAddress === (data.fromChain === "EVM" ? evmAddress : cardanoAddress)) {
+          setIsAccepted(true);
+        }
       } catch (error) {
         console.error('Failed to fetch order details:', error);
       }
@@ -179,8 +225,26 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
     return <div>Loading...</div>;
   }
 
-  const isMaker = order.makerSrcAddress === evmAddress || order.makerDstAddress === cardanoAddress;
+  
+  const acceptOrder = async (orderId: string) => {
+    const response = await fetch(`http://localhost:3000/api/orders/${orderId}/accept`, {
+    
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ orderId ,resolverAddress:order.fromChain === "EVM" ? evmAddress : cardanoAddress}),
+    });
+    const data = await response.json();
+    console.log(data);
+    setOrder((prevOrder) => {
+      if (!prevOrder) return null;
+      return { ...prevOrder, status: "accepted",resolverAddress:order.fromChain === "EVM" ? evmAddress : cardanoAddress as any };
+    });
 
+    // Set accepted state to true which will trigger WebSocket connection
+    setIsAccepted(true);
+  }
 
   const handleStepAction = async (action: string) => {
     if (isProcessing) return; // Prevent multiple executions
@@ -189,24 +253,29 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
     try {
       console.log("handleStepAction", action);
       // Update the step status to completed
-      setOrder((prevOrder) => {
-        if (!prevOrder) return null;
-  
-        if (action === "deploySrcEscrow") {
-          handleDeploySrcEscrow();
+      if(action === "acceptOrder"){
+        await acceptOrder(orderId);
+      } else if (action === "deploySrcEscrow") {
+          await handleDeploySrcEscrow();
         } else if (action === "deployDstEscrow") {
-           handleDeployDstEscrow();
+           await handleDeployDstEscrow();
         } else if (action === "shareSecret") {
+
+
           // Handle share secret logic
         } else if (action === "withdrawMaker") {
-          handleWithdrawMaker();
+          await handleWithdrawMaker();
           // Handle withdraw maker logic
         } else if (action === "withdrawResolver") {
-          handleWithdrawResolver();
+          await handleWithdrawResolver();
           // Handle withdraw resolver logic
         } else if (action === "completeOrder") {
+
           // Handle complete order logic
         }
+
+        setOrder((prevOrder) => {
+          if (!prevOrder) return null;
   
         const updatedSteps = prevOrder.steps?.map((step) => {
           if (step.action === action) {
@@ -224,7 +293,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   const handleWithdrawMaker = async () => {
       //withdraw will be done on cardano side
     if(order.fromChain === "EVM"){
-      const secret = "7c96dc44491cf94d1f726f0550a1a0386b695a16d227013766844d9224287b28" //order.secret;
+      const secret = order.secret as string;
       const secretBytes =  Buffer.from(secret, 'hex')
   
       console.log('Secret Bytes:', secretBytes);
@@ -315,7 +384,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
     else{
       //withdraw will be done on evm side
 
-      const secret = "7c96dc44491cf94d1f726f0550a1a0386b695a16d227013766844d9224287b28" //order.secret;
+      const secret = order.secret as string;
 
       const immutables = {
         orderHash: `0x${order.orderHash}`,
@@ -359,7 +428,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
     //withdraw will be done Cardano side
 
   if(order.fromChain === "Cardano"){
-    const secret = "7c96dc44491cf94d1f726f0550a1a0386b695a16d227013766844d9224287b28" //order.secret;
+    const secret = order.secret as string;
     const secretBytes =  Buffer.from(secret, 'hex')
 
     console.log('Secret Bytes:', secretBytes);
@@ -448,7 +517,7 @@ export function OrderDetail({ orderId, onBack }: OrderDetailProps) {
   else{
     //withdraw will be done on evm side
 
-    const secret = "7c96dc44491cf94d1f726f0550a1a0386b695a16d227013766844d9224287b28" //order.secret;
+    const secret = order.secret as string;
 
     const immutables = {
       orderHash: order.orderHash,

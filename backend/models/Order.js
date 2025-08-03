@@ -156,6 +156,13 @@ const Order = sequelize.define('Order', {
     comment: 'Transaction hash for the withdrawal on the destination chain.'
   },
 
+  secret: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'secret',
+    comment: 'The secret shared by the maker to resolver.'
+  },
+
   // Financials & Timestamps
   relayerFee: {
     type: DataTypes.STRING,

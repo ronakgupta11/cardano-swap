@@ -24,6 +24,7 @@ import UTxOUtils from "@/lib/utxo"
 import { pBSToData, pIntToData, pByteString } from "@harmoniclabs/plu-ts"
 import blockfrost from "@/lib/blockfrost"
 import getTxBuilder from "@/lib/getTxBuilder"
+import { useWebSocket } from "@/hooks/use-websocket"
 
 import { ScriptType, CredentialType, Address, Credential } from '@harmoniclabs/plu-ts';
 import scriptData from "@/testnet/atomic-swap.plutus.json"
@@ -98,9 +99,9 @@ export function SwapInterface({
   const [swapDirection, setSwapDirection] = useState<"evm-to-cardano" | "cardano-to-evm">("evm-to-cardano")
   const { wallet:cardanoWallet, isConnected, address:cardanoAddress } = useCardanoWallet();
   const { address:evmAddress } = useEthereumWallet();
-  const script = Script.fromCbor(scriptData.cborHex, ScriptType.PlutusV3);;
+  const script = Script.fromCbor(scriptData.cborHex, ScriptType.PlutusV3);
   const scriptAddr = new Address("testnet", new Credential(CredentialType.Script, script.hash));
-
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
 
    const authVaultScript = Script.fromCbor(authVaultData.cborHex,  ScriptType.PlutusV3);
    const authVaultAddr = new Address("testnet", new Credential(CredentialType.Script, authVaultScript.hash));
@@ -108,6 +109,7 @@ export function SwapInterface({
 
   const [isSwapping, setIsSwapping] = useState(false)
   const { toast } = useToast()
+  const { storeSecret,connect } = useWebSocket(currentOrderId || '', 'maker');
 
   const handleSwapDirection = () => {
     setSwapDirection((prev) => (prev === "evm-to-cardano" ? "cardano-to-evm" : "evm-to-cardano"))
@@ -425,8 +427,15 @@ export function SwapInterface({
       const data = await response.json();
       const orderId = data.data.id; 
       console.log('API response:', data);
-      storeSecretInLocalStorage(orderId, secret);
+
+      // Store secret and set up WebSocket connection
+      storeSecretInLocalStorage(`secret_${orderId}`, secret);
       console.log('Secret stored in local storage:', secret);
+      
+      // Update the orderId to trigger WebSocket connection
+      setCurrentOrderId(orderId);
+      connect();
+      
 
       // Show success toast
       toast({
@@ -673,3 +682,4 @@ export function SwapInterface({
     </div>
   )
 }
+

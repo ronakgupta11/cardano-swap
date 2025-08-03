@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { getAllOrders, getOrderById, createOrder, updateOrderStatus,updateOrderEscrowAddresses,updateOrderTxHashes } from '../controllers/ordersController.js';
+import { getAllOrders, getOrderById, createOrder, updateOrderStatus,updateOrderEscrowAddresses,updateOrderTxHashes,acceptOrder } from '../controllers/ordersController.js';
 
 const router = express.Router();
 
@@ -122,6 +122,7 @@ router.get('/', getAllOrders);
  */
 router.patch('/:id/escrow-addresses', updateOrderEscrowAddresses);
 router.patch('/:id/tx-hash', updateOrderTxHashes);
+router.post('/:id/accept', acceptOrder);
 
 /**
  * @swagger
